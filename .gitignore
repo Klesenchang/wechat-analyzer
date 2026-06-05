@@ -13,3 +13,4 @@ custom_tags.json
 custom_identities.json
 password.txt
 .hermes/
+.DS_Store
