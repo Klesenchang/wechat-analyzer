@@ -1,4 +1,4 @@
-# wechat-analyzer · 微信聊天分析器
+# wechat-analyzer · 微信聊天分析器 [查看项目介绍页 →](https://klesenchang.github.io/wechat-analyzer/) 
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-macOS-lightgrey.svg)](#前置条件)
@@ -7,8 +7,6 @@
 [![GitHub Pages](https://img.shields.io/badge/GitHub%20Pages-%E9%A1%B9%E7%9B%AE%E4%BB%8B%E7%BB%8D-blue?logo=github)](https://klesenchang.github.io/wechat-analyzer/)
 
 > 基于 wx-cli 的本地微信聊天分析工具。所有数据在本地计算，**无需上传**。
-
-[查看项目介绍页 →](https://klesenchang.github.io/wechat-analyzer/) — 暗色主题，WebGL 背景，与 app 风格一致。
 
 ---
 
