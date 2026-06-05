@@ -102,20 +102,7 @@
       line-height: 1.5;
       max-width: 520px;
     }
-    .settings-gear {
-      position: fixed;
-      top: 20px;
-      right: 24px;
-      font-size: 1.1rem;
-      cursor: pointer;
-      opacity: 0.5;
-      transition: opacity 0.2s;
-      z-index: var(--z-dropdown);
-      width: 36px; height: 36px;
-      display: flex; align-items: center; justify-content: center;
-      border-radius: 8px;
-    }
-    .settings-gear:hover { opacity: 1; background: var(--glass); }
+
 
     /* ── Control Panel ── */
     .panel {
@@ -701,7 +688,7 @@
 
     /* ── Settings Gear ── */
     .settings-gear {
-      position: absolute; right: 0; top: 8px;
+      margin-left: auto;
       display: inline-flex; align-items: center; justify-content: center;
       width: 38px; height: 38px;
       cursor: pointer;
@@ -1119,7 +1106,25 @@
     .gv-role-name { font-weight: 600; font-size: 0.8rem; }
     .gv-role-members { font-size: 0.72rem; }
     .gv-role-desc { font-size: 0.68rem; color: var(--text2); }
-  </style>
+    /* Footer */
+  .app-footer {
+    display: flex;
+    justify-content: space-between;
+    max-width: 600px;
+    margin: 0 auto;
+    padding: 24px 0 16px;
+    font-size: 0.75rem;
+    color: var(--muted);
+  }
+  .app-footer a {
+    color: var(--accent);
+    text-decoration: none;
+    opacity: 0.7;
+    transition: opacity 0.2s;
+  }
+  .app-footer a:hover { opacity: 1; }
+  .app-footer .sep { margin: 0 4px; opacity: 0.4; }
+</style>
 </head>
 <body>
 <canvas id="bg-fluid"></canvas>
@@ -1135,13 +1140,12 @@
           <rect x="18" y="8" width="2.5" height="11" rx="1" fill="#0d1117"/>
         </svg>
         <h1>微信聊天分析器</h1>
+        <span class="settings-gear" onclick="toggleSettings()" title="设置">⚙️</span>
       </div>
       <p>
         从聊天记录中提取关系温度、情绪走势、话题地图 — 不只是看数据，是看懂关系
       </p>
     </div>
-
-    <span class="settings-gear" onclick="toggleSettings()" title="设置">⚙️</span>
 
     <!-- Control Panel -->
     <div class="panel">
@@ -3944,5 +3948,14 @@
     })();
   })();
   </script>
+<div class="app-footer">
+  <span>MIT License</span>
+  <span></span>
+  <span>
+    <a href="https://github.com/jackwener/wx-cli" target="_blank" rel="noopener">wx-cli</a>
+    <span class="sep">·</span>
+    <a href="https://github.com/Klesenchang/wechat-analyzer" target="_blank" rel="noopener">wechat-analyzer</a>
+  </span>
+</div>
 </body>
 </html>
