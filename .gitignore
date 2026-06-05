@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+*.spec
+all_keys.json
+config.json
+config.json.bak
+usage_stats.json
+custom_tags.json
+custom_identities.json
+password.txt
+.hermes/

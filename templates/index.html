@@ -1,0 +1,3948 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>微信聊天分析器</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='2' y='3' width='24' height='20' rx='5' fill='%2358a6ff'/%3E%3Cpolygon points='6,25 3,30 10,25' fill='%2358a6ff'/%3E%3Crect x='9' y='13' width='2.5' height='6' rx='1' fill='%230d1117'/%3E%3Crect x='13.5' y='10' width='2.5' height='9' rx='1' fill='%230d1117'/%3E%3Crect x='18' y='8' width='2.5' height='11' rx='1' fill='%230d1117'/%3E%3C/svg%3E"/>
+  <script src="vendor/chart.min.js"></script>
+  <script src="vendor/html2canvas.min.js"></script>
+  <script src="vendor/pinyin-pro.js"></script>
+  <style>
+    :root {
+      --bg: #090b10;
+      --bg2: rgba(255,255,255,0.03);
+      --card: rgba(255,255,255,0.04);
+      --border: rgba(255,255,255,0.06);
+      --text: #e8eaed;
+      --text2: #8b929a;
+      --muted: #4e535a;
+      --accent: #7eb8ff;
+      --green: #46c263;
+      --orange: #e3a82b;
+      --pink: #e870a8;
+      --purple: #b088f7;
+      --red: #f7626a;
+      --glass: rgba(255,255,255,0.05);
+      --glass-border: rgba(255,255,255,0.08);
+      --glass-hover: rgba(255,255,255,0.08);
+      --radius-sm: 10px;
+      --radius: 14px;
+      --z-dropdown: 100;
+      --z-modal: 200;
+      --z-overlay: 300;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro', 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.5;
+    }
+
+    /* ── WebGL Fluid Background ── */
+    #bg-fluid {
+      position: fixed;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 0;
+      display: block;
+      pointer-events: none;
+      opacity: 0.55;
+    }
+
+    /* ── Layout ── */
+    .app {
+      position: relative;
+      z-index: 1;
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 40px 24px 80px;
+    }
+    /* ── Focus visible ── */
+    :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .field input:focus-visible, .field select:focus-visible,
+    .modal .row input:focus-visible, .modal .row select:focus-visible,
+    .settings-tab:focus-visible, .summary-tab:focus-visible, .time-btn:focus-visible {
+      outline: none; box-shadow: 0 0 0 2px var(--accent);
+    }
+
+    /* ── Header ── */
+    .header {
+      position: relative;
+      margin-bottom: 56px;
+      padding-top: 28px;
+    }
+    .header-top {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 10px;
+    }
+    .header h1 {
+      font-size: 1.75rem;
+      font-weight: 700;
+      color: var(--accent);
+      letter-spacing: -0.02em;
+      line-height: 1.2;
+    }
+    .header .logo-icon {
+      width: 32px;
+      height: 32px;
+      flex-shrink: 0;
+      opacity: 0.9;
+    }
+    .header p {
+      color: var(--text2);
+      font-size: 0.9rem;
+      line-height: 1.5;
+      max-width: 520px;
+    }
+    .settings-gear {
+      position: fixed;
+      top: 20px;
+      right: 24px;
+      font-size: 1.1rem;
+      cursor: pointer;
+      opacity: 0.5;
+      transition: opacity 0.2s;
+      z-index: var(--z-dropdown);
+      width: 36px; height: 36px;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 8px;
+    }
+    .settings-gear:hover { opacity: 1; background: var(--glass); }
+
+    /* ── Control Panel ── */
+    .panel {
+      background: var(--glass);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid var(--glass-border);
+      border-radius: var(--radius);
+      padding: 28px;
+      margin-bottom: 40px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      align-items: flex-end;
+      box-shadow: 0 4px 32px rgba(0,0,0,0.25), 0 1px 0 rgba(255,255,255,0.04) inset;
+    }
+    .panel-label {
+      width: 100%;
+      font-size: 0.7rem;
+      font-weight: 600;
+      color: var(--text2);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: -6px;
+      margin-top: -4px;
+    }
+    .field {
+      display: flex;
+      flex-direction: column; gap: 4px;
+    }
+    .field label {
+      font-size: 0.8rem;
+      color: var(--text2);
+      font-weight: 500;
+    }
+    .field input,
+    .field select {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--glass-border);
+      border-radius: var(--radius-sm);
+      color: var(--text);
+      padding: 12px 16px;
+      font-size: 0.9rem;
+      transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
+      font-family: inherit;
+    }
+    .field input:focus, .field select:focus {
+      background: rgba(255,255,255,0.06);
+      border-color: rgba(126,184,255,0.5);
+      box-shadow: 0 0 0 3px rgba(126,184,255,0.1);
+    }
+
+    .field input::placeholder { color: var(--muted); }
+    .field input:focus-visible,
+    .field select:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 1px;
+    }
+    .field input::placeholder {
+      color: var(--muted);
+    }
+
+    /* Contact autocomplete */
+    .contact-field {
+      position: relative;
+      flex: 1;
+      min-width: 220px;
+    }
+    .contact-field input {
+      width: 100%;
+    }
+    .suggestions {
+      position: absolute;
+      top: 100%;
+      left: 0; right: 0;
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      max-height: 260px;
+      overflow-y: auto;
+      z-index: var(--z-dropdown);
+      display: none;
+      margin-top: 4px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    }
+    .suggestions.active { display: block; }
+    .suggestion-item {
+      padding: 10px 14px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      transition: background 0.1s;
+    }
+    .suggestion-item:hover,
+    .suggestion-item.selected {
+      background: var(--card);
+    }
+    .suggestion-item .badge {
+      font-size: 0.7rem;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+    .badge.private { background: var(--accent); color: #fff; }
+    .badge.group { background: var(--green); color: #000; }
+
+    .suggestion-group-header {
+      padding: 8px 14px 4px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: var(--text2);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    /* ── Buttons ── */
+    .btn {
+      padding: 12px 32px;
+      border: 1px solid var(--glass-border);
+      border-radius: var(--radius-sm);
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      white-space: nowrap;
+      font-family: inherit;
+      letter-spacing: 0.01em;
+    }
+    .btn-primary {
+      background: rgba(126,184,255,0.18);
+      color: var(--accent);
+      border-color: rgba(126,184,255,0.3);
+    }
+    .btn-primary:hover {
+      background: rgba(126,184,255,0.28);
+      border-color: rgba(126,184,255,0.45);
+      box-shadow: 0 0 20px rgba(126,184,255,0.12);
+    }
+    .btn-primary:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+      box-shadow: none;
+    }
+    .btn-secondary {
+      background: var(--glass);
+      color: var(--text2);
+      border: 1px solid var(--glass-border);
+    }
+    .btn-secondary:hover { background: var(--glass-hover); color: var(--text); }
+
+    /* ── Loading ── */
+    .spinner {
+      display: none;
+      text-align: center;
+      padding: 40px;
+      color: var(--text2);
+    }
+    .spinner.active { display: block; }
+    .spinner .dots::after {
+      content: '';
+      display: inline-block;
+      animation: dots 1.4s infinite;
+    }
+    @keyframes dots {
+      0%, 20% { content: '.'; }
+      40% { content: '..'; }
+      60%, 100% { content: '...'; }
+    }
+
+    /* ── Capabilities Preview (startup page) ── */
+    .capabilities {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin-bottom: 32px;
+    }
+    .cap-card {
+      background: var(--glass);
+      border: 1px solid var(--glass-border);
+      border-radius: var(--radius);
+      padding: 24px;
+      transition: border-color 0.25s, background 0.25s;
+    }
+    .cap-card:hover {
+      border-color: rgba(126,184,255,0.2);
+      background: var(--glass-hover);
+    }
+    .cap-card .cap-icon {
+      font-size: 1.5rem;
+      margin-bottom: 12px;
+      opacity: 0.85;
+    }
+    .cap-card .cap-title {
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 6px;
+    }
+    .cap-card .cap-desc {
+      font-size: 0.8rem;
+      color: var(--text2);
+      line-height: 1.55;
+    }
+    .cap-card .cap-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 12px;
+    }
+    .cap-tag {
+      font-size: 0.68rem;
+      padding: 3px 10px;
+      border-radius: 12px;
+      background: rgba(126,184,255,0.1);
+      color: var(--accent);
+      font-weight: 500;
+      white-space: nowrap;
+    }
+
+    /* ── Error ── */
+    .error-box {
+      background: rgba(247,98,106,0.12); backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border: 1px solid var(--red);
+      border-radius: 8px;
+      padding: 16px;
+      color: var(--red);
+      margin-bottom: 20px;
+      display: none;
+    }
+    .error-box.active { display: block; }
+
+    /* ── Results ── */
+    .results { display: none; }
+    .results.active {
+      display: block;
+      border-top: 1px solid var(--glass-border);
+      padding-top: 32px;
+      margin-top: 8px;
+    }
+
+    /* Stats Cards */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 16px;
+      margin-bottom: 28px;
+    }
+    .stat-card {
+      background: var(--glass);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid var(--glass-border);
+      border-radius: var(--radius);
+      padding: 20px;
+      text-align: center;
+    }
+    .stat-card:first-child {
+      background: rgba(126,184,255,0.08);
+      border-color: rgba(126,184,255,0.2);
+    }
+    .stat-card .value {
+      font-size: 2.2rem;
+      font-weight: 700;
+    }
+    .stat-card .label {
+      color: var(--text2);
+      font-size: 0.8rem;
+      margin-top: 4px;
+    }
+    .stat-card .value.accent { color: var(--accent); }
+    .stat-card .value.green { color: var(--green); }
+    .stat-card .value.orange { color: var(--orange); }
+    .stat-card .value.pink { color: var(--pink); }
+
+    /* Sections */
+    .section {
+      background: var(--glass);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid var(--glass-border);
+      border-radius: var(--radius);
+      padding: 28px;
+      margin-bottom: 20px;
+    }
+    .section-title {
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: var(--accent);
+      margin-bottom: 16px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+    .section-title::before {
+      content: '';
+      margin-right: 0;
+    }
+    .chart-box {
+      margin-top: 4px;
+      background: rgba(255,255,255,0.02);
+      border-radius: var(--radius-sm);
+      padding: 12px;
+    }
+
+    /* Usage table zebra */
+    #uFnTable tr:nth-child(even) { background: rgba(48,54,61,0.4); }
+    #uFnTable td { padding: 7px 8px; }
+
+
+    .empty-state {
+      position: relative;
+      min-height: 200px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+    .chart-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+    }
+    @media (max-width: 768px) {
+      .chart-row { grid-template-columns: 1fr; }
+      .panel { flex-direction: column; align-items: stretch; gap: 12px; padding: 20px; }
+      .panel .field { width: 100%; }
+      .phase-intimacy-row { grid-template-columns: 1fr; }
+      .capabilities { grid-template-columns: 1fr; }
+      .header p { font-size: 0.82rem; }
+    }
+    @media (max-width: 480px) {
+      .app { padding: 16px 12px 64px; }
+      .panel { padding: 16px; gap: 10px; align-items: center; }
+      .field { width: 100%; }
+      .field input, .field select { width: 100%; text-align: center; }
+      .stats-grid { grid-template-columns: 1fr 1fr; }
+      .section { padding: 18px; }
+      .intimacy-big { font-size: 3rem; }
+      .summary-overview { grid-template-columns: 1fr 1fr; }
+    }
+    /* Sender ranking */
+    .sender-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .sender-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .sender-num {
+      width: 26px; height: 26px;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.75rem; font-weight: 700; flex-shrink: 0;
+    }
+    .sender-num.r1 { background: var(--orange); color: #000; }
+    .sender-num.r2 { background: var(--muted); color: #fff; }
+    .sender-num.r3 { background: #8b5a2b; color: #fff; }
+    .sender-num.rn { background: var(--bg2); color: var(--text2); }
+    .sender-name { flex: 1; font-size: 0.85rem; font-weight: 500; }
+    .sender-count { font-size: 0.8rem; color: var(--text2); width: 48px; text-align: right; }
+    .sender-bar-wrap { flex: 2; height: 6px; background: var(--bg2); border-radius: 3px; overflow: hidden; }
+    .sender-bar { height: 100%; border-radius: 3px; transition: width 0.3s; }
+
+    /* Topic tags */
+    .topic-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .topic-item {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 6px 14px;
+      font-size: 0.85rem;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .topic-item .t-name { color: var(--accent); font-weight: 600; }
+    .topic-item .t-kw { color: var(--text2); font-size: 0.75rem; }
+
+    /* Recent messages */
+    .msg-list {
+      max-height: 500px;
+      overflow-y: auto;
+    }
+    .msg-item {
+      padding: 8px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.85rem;
+      display: flex;
+      gap: 10px;
+      align-items: baseline;
+    }
+    .msg-item:last-child { border-bottom: none; }
+    .msg-time { color: var(--muted); font-size: 0.75rem; white-space: nowrap; min-width: 48px; }
+    .msg-who { font-weight: 600; white-space: nowrap; min-width: 40px; font-size: 0.8rem; }
+    .msg-who.her { color: var(--pink); }
+    .msg-who.me { color: var(--green); }
+    .msg-body { word-break: break-all; }
+
+    /* Reply stats table */
+    .info-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+    }
+    .info-table td {
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    .info-table td:first-child {
+      color: var(--text2);
+      width: 120px;
+    }
+
+    /* Daily chart section */
+    .daily-chart { height: 280px; }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    /* ── Phase + Intimacy Row ── */
+    .phase-intimacy-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    @media (max-width: 768px) { .phase-intimacy-row { grid-template-columns: 1fr; } }
+    @media (max-width: 768px) { .quick-nav { display: none !important; } }
+
+    .phase-card { text-align: center; }
+    .phase-label { font-size: 1.5rem; font-weight: 700; margin-bottom: 8px; }
+    .phase-desc { color: var(--text2); font-size: 0.85rem; margin-bottom: 16px; line-height: 1.6; }
+    .phase-timeline { display: flex; align-items: flex-end; justify-content: center; gap: 12px; height: 100px; }
+    .phase-bar-col { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+    .phase-bar { width: 24px; border-radius: 4px 4px 0 0; min-height: 8px; transition: height 0.5s; }
+    .phase-bar-label { font-size: 0.7rem; color: var(--text2); }
+
+    /* ── Intimacy ── */
+    .intimacy-card { text-align: center; }
+    .intimacy-big {
+      font-size: 4rem; font-weight: 800;
+      color: var(--accent);
+      line-height: 1;
+    }
+    .intimacy-label { color: var(--text2); font-size: 0.9rem; margin-bottom: 20px; }
+    .intimacy-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+    .intimacy-name { font-size: 0.8rem; color: var(--text2); width: 70px; text-align: right; }
+    .intimacy-val { font-size: 0.8rem; font-weight: 600; width: 36px; text-align: right; }
+    .intimacy-bar-wrap { flex: 1; height: 8px; background: var(--bg2); border-radius: 4px; overflow: hidden; }
+    .intimacy-bar { height: 100%; border-radius: 4px; transition: width 0.6s ease; }
+
+    /* ── Signals ── */
+    .signal-summary {
+      color: var(--text2); font-size: 0.85rem; margin-bottom: 16px;
+      padding: 10px 16px; background: var(--bg2); border-radius: 8px;
+      border-left: 3px solid var(--accent);
+    }
+    .signal-words { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+    .signal-word-group {
+      background: var(--bg2); border-radius: 8px; padding: 8px 14px;
+      display: flex; align-items: center; gap: 8px; font-size: 0.8rem;
+    }
+    .sw-icon { font-size: 1.1rem; }
+    .sw-name { font-weight: 600; }
+    .sw-density { color: var(--text2); }
+    .sw-words { color: var(--accent); font-size: 0.75rem; }
+
+    /* ── Dynamics ── */
+    .dynamics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; }
+    .dyn-card {
+      background: var(--glass); backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px); border-radius: var(--radius); padding: 20px;
+      text-align: center; border: 1px solid var(--border);
+    }
+    .dyn-icon { font-size: 1.8rem; margin-bottom: 8px; }
+    .dyn-title { font-size: 0.8rem; color: var(--text2); margin-bottom: 6px; }
+    .dyn-value { font-size: 1.6rem; font-weight: 700; }
+    .dyn-values { font-size: 1rem; font-weight: 600; }
+    .dyn-sub { font-size: 0.75rem; color: var(--muted); margin-top: 4px; }
+
+    /* ── Advice ── */
+    .advice-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+    .advice-card {
+      background: var(--bg2); border-radius: var(--radius); padding: 18px;
+      border: 1px solid var(--border); transition: transform 0.15s;
+    }
+    .advice-card:hover { transform: translateY(-2px); }
+    .advice-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+    .advice-icon { font-size: 1.3rem; }
+    .advice-priority {
+      font-size: 0.7rem; padding: 2px 8px; border-radius: 10px;
+      background: var(--card); color: var(--text2); font-weight: 600;
+    }
+    .advice-title { font-weight: 600; font-size: 0.95rem; margin-bottom: 6px; }
+    .advice-detail { font-size: 0.82rem; color: var(--text2); line-height: 1.6; }
+    .advice-topics { margin-top: 10px; display: flex; flex-direction: column; gap: 4px; }
+    .advice-topic-item {
+      font-size: 0.78rem; color: var(--green); padding: 4px 10px;
+      background: rgba(63,185,80,0.08); border-radius: 6px;
+      border-left: 2px solid var(--green);
+    }
+
+    /* ── Tier cards ── */
+    .tier-list { display: flex; flex-direction: column; gap: 10px; justify-content: center; }
+    .tier-card {
+      background: var(--bg2); border-radius: 8px; padding: 12px 16px;
+      border: 1px solid var(--border);
+    }
+    .tier-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+    .tier-name { font-weight: 600; font-size: 0.9rem; }
+    .tier-pct { font-weight: 700; font-size: 1rem; color: var(--accent); }
+    .tier-bar-wrap { height: 6px; background: var(--bg); border-radius: 3px; margin-bottom: 4px; }
+    .tier-bar { height: 100%; border-radius: 3px; background: var(--accent); transition: width 0.5s; }
+    .tier-detail { font-size: 0.75rem; color: var(--text2); }
+    .tier-members { font-size: 0.7rem; color: var(--muted); margin-top: 2px; }
+
+    /* ── Quick Nav (Right Floating) ── */
+    .quick-nav {
+      display: none;
+      position: fixed; right: 16px; bottom: 80px;
+      z-index: var(--z-dropdown);
+      display: none; flex-direction: column; gap: 6px;
+      width: 52px;
+      animation: quickNavIn 0.3s ease;
+    }
+    @keyframes quickNavIn {
+      from { opacity: 0; transform: translateX(12px); }
+      to   { opacity: 1; transform: translateX(0); }
+    }
+    .quick-nav.visible { display: flex; }
+    .quick-nav-btn {
+      display: flex; flex-direction: column; align-items: center; gap: 2px;
+      padding: 8px 4px; border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 10px; font-size: 0.65rem; font-weight: 600;
+      cursor: pointer; transition: all 0.15s;
+      background: rgba(18,20,28,0.85); backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      color: var(--text2); text-align: center; line-height: 1.2;
+    }
+    .quick-nav-btn:hover { color: var(--text); border-color: rgba(255,255,255,0.15); }
+    .quick-nav-btn.screenshot {
+      background: rgba(88,166,255,0.15); color: var(--accent); border-color: rgba(88,166,255,0.25);
+    }
+    .quick-nav-btn.screenshot:hover { background: rgba(88,166,255,0.25); }
+    .quick-nav-btn.screenshot.loading { opacity: 0.6; pointer-events: none; }
+    @media (max-width: 768px) { .quick-nav { display: none !important; } }
+
+    .phase-card { text-align: center; }
+    .phase-label { font-size: 1.5rem; font-weight: 700; margin-bottom: 8px; }
+    /* ── Topic Rank ── */
+    .topic-rank-list { display: flex; flex-direction: column; gap: 5px; }
+    .topic-rank-item { font-size: 0.78rem; display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 6px; }
+    .topic-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+    .topic-rank-name { font-weight: 600; min-width: 36px; }
+    .topic-rank-bar-wrap { width: 60px; height: 4px; background: var(--bg); border-radius: 2px; flex-shrink: 0; }
+    .topic-rank-bar { height: 100%; border-radius: 2px; }
+    .topic-rank-pct { color: var(--text2); font-size: 0.7rem; min-width: 36px; }
+    .topic-trend { font-size: 0.65rem; font-weight: 600; }
+    .topic-trend.up { color: var(--green); }
+    .topic-trend.down { color: var(--red); }
+    .topic-rank-kw { color: var(--muted); font-size: 0.65rem; }
+    .topic-rank-msg { color: var(--text2); font-size: 0.68rem; width: 100%; padding-left: 14px; border-left: 2px solid var(--border); opacity: 0.85; }
+
+    .topic-hidden { display: none; }
+    .topic-hidden.open { display: flex; flex-direction: column; gap: 5px; }
+    .topic-expand-btn {
+      background: none; border: none; color: var(--accent); font-size: 0.72rem;
+      cursor: pointer; padding: 4px 0; margin-top: 2px;
+    }
+    .topic-expand-btn:hover { text-decoration: underline; }
+
+    /* ── Settings Gear ── */
+    .settings-gear {
+      position: absolute; right: 0; top: 8px;
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 38px; height: 38px;
+      cursor: pointer;
+      font-size: 1.15rem;
+      border-radius: 12px;
+      background: rgba(255,255,255,0.03);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255,255,255,0.06);
+      color: var(--text2);
+      transition: all 0.2s;
+    }
+    .settings-gear:hover {
+      color: var(--accent);
+      background: rgba(126,184,255,0.1);
+      border-color: rgba(126,184,255,0.2);
+      box-shadow: 0 0 18px rgba(126,184,255,0.08), inset 0 0 8px rgba(126,184,255,0.04);
+    }
+
+    /* ── Settings Tabs ── */
+    .settings-tabs {
+      display: flex; gap: 6px; margin-bottom: 28px;
+      background: rgba(255,255,255,0.025);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-radius: 14px; padding: 5px;
+      border: 1px solid rgba(255,255,255,0.06);
+    }
+    .settings-tab {
+      padding: 9px 16px; border: none; border-radius: 11px;
+      background: transparent; color: var(--text2); font-size: 0.78rem;
+      cursor: pointer; transition: all 0.25s cubic-bezier(0.4,0,0.2,1); font-weight: 500;
+      letter-spacing: 0.01em; white-space: nowrap;
+      flex: 1 1 0; text-align: center; min-width: 0;
+    }
+    .settings-tab:hover { color: var(--text); background: rgba(255,255,255,0.04); }
+    .settings-tab.active {
+      background: rgba(126,184,255,0.14);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      color: var(--accent); font-weight: 600;
+      box-shadow: 0 2px 8px rgba(126,184,255,0.08), inset 0 1px 0 rgba(255,255,255,0.06);
+    }
+
+    .settings-panel { display: none; }
+    .settings-panel.active { display: block; }
+    .modal-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.35);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      z-index: var(--z-modal);
+      justify-content: center; align-items: center;
+    }
+    .modal-overlay.show { display: flex; }
+    .modal {
+      background: rgba(10,12,20,0.58);
+      backdrop-filter: blur(48px) saturate(1.3);
+      -webkit-backdrop-filter: blur(48px) saturate(1.3);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 22px; padding: 30px; width: 680px; max-width: 94vw;
+      max-height: 88vh; overflow-y: auto; overflow-x: hidden;
+      box-shadow:
+        0 0 0 1px rgba(255,255,255,0.03) inset,
+        0 1px 0 rgba(255,255,255,0.04) inset,
+        0 8px 32px rgba(0,0,0,0.25),
+        0 2px 8px rgba(0,0,0,0.2),
+        0 0 100px rgba(126,184,255,0.03);
+    }
+    .modal h2 { font-size: 1.2rem; margin-bottom: 20px; font-weight: 700; letter-spacing: -0.01em; }
+    .modal .row {
+      display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px;
+    }
+    .modal .row label {
+      font-size: 0.78rem; color: var(--text2); font-weight: 600; letter-spacing: 0.02em;
+    }
+    .modal .row input, .modal .row select {
+      background: rgba(255,255,255,0.035);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 10px; color: var(--text); padding: 10px 14px;
+      font-size: 0.88rem; outline: none; transition: all 0.25s cubic-bezier(0.4,0,0.2,1);
+    }
+    .modal .row input:focus, .modal .row select:focus {
+      border-color: var(--accent);
+      background: rgba(255,255,255,0.05);
+      box-shadow: 0 0 0 3px rgba(126,184,255,0.08), 0 0 20px rgba(126,184,255,0.04);
+    }
+    .modal .row input::placeholder { color: var(--muted); }
+    .modal .toggle-row {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 16px;
+    }
+    .modal .toggle-row span { color: var(--text2); font-size: 0.82rem; }
+    .toggle-switch {
+      width: 48px; height: 26px; background: rgba(255,255,255,0.05);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border: 1px solid rgba(255,255,255,0.04);
+      border-radius: 13px; cursor: pointer; position: relative;
+      transition: all 0.25s cubic-bezier(0.4,0,0.2,1);
+    }
+    .toggle-switch.on {
+      background: var(--green); border-color: rgba(70,194,99,0.4);
+      box-shadow: 0 0 14px rgba(70,194,99,0.2), inset 0 1px 0 rgba(255,255,255,0.15);
+    }
+    .toggle-switch::after {
+      content: ''; position: absolute; top: 3px; left: 3px;
+      width: 20px; height: 20px; background: #fff;
+      border-radius: 50%; transition: transform 0.25s cubic-bezier(0.4,0,0.2,1);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+    }
+    .toggle-switch.on::after { transform: translateX(22px); }
+    .toggle-switch.disabled { opacity: 0.35; cursor: not-allowed; pointer-events: none; }
+    .modal .actions {
+      display: flex; gap: 10px; margin-top: 28px; justify-content: flex-end;
+    }
+    .modal .actions button {
+      padding: 10px 24px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.06);
+      background: rgba(255,255,255,0.035);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      color: var(--text); font-size: 0.85rem; cursor: pointer;
+      transition: all 0.25s cubic-bezier(0.4,0,0.2,1); font-weight: 500;
+    }
+    .modal .actions button:hover {
+      background: rgba(255,255,255,0.07);
+      border-color: rgba(255,255,255,0.1);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    }
+    .modal .actions button.btn-primary {
+      background: rgba(126,184,255,0.14);
+      border-color: rgba(126,184,255,0.2);
+      color: var(--accent);
+      font-weight: 600;
+      box-shadow: 0 0 16px rgba(126,184,255,0.06);
+    }
+    .modal .actions button.btn-primary:hover {
+      background: rgba(126,184,255,0.22);
+      box-shadow: 0 0 24px rgba(126,184,255,0.12);
+    }
+    .modal .status { font-size: 0.8rem; margin-top: 10px; min-height: 20px; color: var(--text2); }
+
+    /* ── LLM Panel in Detail ── */
+    .llm-panel {
+      background: rgba(255,255,255,0.02);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255,255,255,0.05);
+      border-radius: 14px; padding: 20px; margin-top: 20px;
+    }
+    .llm-panel h3 {
+      font-size: 0.95rem; margin-bottom: 12px;
+      color: var(--accent); font-weight: 700;
+    }
+    .llm-panel .llm-result {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 10px; padding: 14px; font-size: 0.82rem;
+      line-height: 1.5; display: none;
+    }
+    .llm-panel .llm-result.show { display: block; }
+    .llm-badge {
+      display: inline-block; padding: 3px 10px; border-radius: 6px;
+      font-size: 0.7rem; font-weight: 600; margin-left: 8px;
+      background: rgba(126,184,255,0.15);
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+      color: var(--accent);
+      border: 1px solid rgba(126,184,255,0.15);
+    }
+
+    /* ── Usage stat cards in modal ── */
+    .modal .stat-card {
+      background: rgba(255,255,255,0.025) !important;
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border: 1px solid rgba(255,255,255,0.05) !important;
+      border-radius: 12px !important;
+    }
+
+    /* ── AI Loading Header ── */
+    .ai-loading-header {
+      display: flex; align-items: center; gap: 12px;
+      color: var(--text2); font-size: 0.9rem; font-weight: 500;
+      padding: 14px 0; margin-bottom: 8px;
+    }
+    .ai-loading-pulse {
+      width: 10px; height: 10px; border-radius: 50%;
+      background: var(--accent);
+      animation: aiPulse 1.2s ease-in-out infinite;
+    }
+    @keyframes aiPulse {
+      0%, 100% { opacity: 0.2; transform: scale(0.8); }
+      50% { opacity: 1; transform: scale(1.3); }
+    }
+    .ai-loading-dots::after {
+      content: '';
+      animation: aiDots 1.5s steps(4, end) infinite;
+    }
+    @keyframes aiDots {
+      0% { content: ''; }
+      25% { content: '.'; }
+      50% { content: '..'; }
+      75% { content: '...'; }
+    }
+
+    /* ── AI Analysis Cards ── */
+    .ai-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 22px 24px;
+      margin-bottom: 18px;
+    }
+    .ai-card-title {
+      font-size: 0.88rem; font-weight: 700; letter-spacing: 0.02em;
+      margin-bottom: 16px; padding-bottom: 12px;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .ai-card-body { font-size: 0.85rem; line-height: 1.65; }
+    .ai-empty {
+      color: var(--muted); font-size: 0.8rem;
+      text-align: center; padding: 18px 0;
+    }
+
+    /* Per-dimension title colors */
+    .ai-card.signal  .ai-card-title { color: var(--pink); }
+    .ai-card.reply   .ai-card-title { color: var(--green); }
+    .ai-card.insight .ai-card-title { color: var(--purple); }
+    .ai-card.topics  .ai-card-title { color: var(--accent); }
+    .ai-card.todos   .ai-card-title { color: var(--orange); }
+    .ai-card.emotion .ai-card-title { color: #e879f9; }
+
+    /* Signal card */
+    .ai-signal-grid {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    .ai-signal-item {
+      background: var(--bg2); border-radius: 10px;
+      padding: 15px 16px; border: 1px solid var(--border);
+      transition: border-color 0.2s;
+    }
+    .ai-signal-item.warn {
+      border-color: rgba(248,81,73,0.5);
+      background: linear-gradient(135deg, rgba(248,81,73,0.08), rgba(248,81,73,0.02));
+    }
+    .ai-signal-label {
+      font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em;
+      color: var(--text2); margin-bottom: 8px; font-weight: 600;
+    }
+    .ai-signal-item.warn .ai-signal-label { color: var(--red); }
+    .ai-signal-value {
+      font-size: 0.83rem; font-weight: 500; line-height: 1.55;
+    }
+    .ai-signal-tip {
+      font-size: 0.8rem; font-weight: 400; padding: 5px 0 5px 14px;
+      border-left: 2px solid var(--pink); margin-top: 5px;
+    }
+    .ai-signal-reply {
+      margin-top: 14px; padding: 11px 18px; border-radius: 10px;
+      text-align: center; font-weight: 700; font-size: 0.84rem; letter-spacing: 0.02em;
+    }
+    .ai-signal-reply.yes {
+      background: rgba(63,185,80,0.12); color: var(--green);
+      border: 1px solid rgba(63,185,80,0.3);
+    }
+    .ai-signal-reply.no {
+      background: rgba(248,81,73,0.08); color: var(--red);
+      border: 1px solid rgba(248,81,73,0.25);
+    }
+
+    /* Reply card */
+    .ai-reply-context {
+      font-size: 0.8rem; color: var(--text2); font-weight: 500;
+      margin-bottom: 16px; padding: 12px 16px;
+      background: linear-gradient(90deg, rgba(63,185,80,0.06), transparent);
+      border-radius: 8px; border-left: 3px solid var(--green);
+    }
+    .ai-reply-item {
+      display: flex; gap: 12px; align-items: flex-start;
+      margin-bottom: 16px;
+    }
+    .ai-reply-item:last-child { margin-bottom: 0; }
+    .ai-reply-num {
+      width: 30px; height: 30px; border-radius: 50%;
+      background: linear-gradient(135deg, var(--green), #2ea043);
+      color: #000; display: flex; align-items: center; justify-content: center;
+      font-size: 0.78rem; font-weight: 800; flex-shrink: 0;
+    }
+    .ai-reply-content { flex: 1; }
+    .ai-reply-tag {
+      display: inline-block; padding: 2px 10px; border-radius: 10px;
+      font-size: 0.68rem; font-weight: 700; margin-right: 8px; letter-spacing: 0.03em;
+      background: rgba(63,185,80,0.12); color: var(--green);
+    }
+    .ai-reply-text {
+      font-size: 0.84rem; font-weight: 500; line-height: 1.55;
+    }
+    .ai-reply-reason {
+      font-size: 0.73rem; color: var(--text2); font-weight: 400;
+      margin-top: 5px; font-style: italic;
+      padding-left: 2px;
+    }
+
+    /* Insight / Emotion card — quote style */
+    .ai-insight {
+      font-size: 0.84rem; font-weight: 400; line-height: 1.75;
+      padding: 4px 0 4px 18px;
+      border-left: 3px solid var(--purple);
+      color: #d2cdf6;
+    }
+    .ai-card.emotion .ai-insight {
+      border-left-color: #e879f9;
+    }
+
+    /* Topics card */
+    .ai-topic-line {
+      font-size: 0.82rem; font-weight: 400; line-height: 1.5;
+      padding: 10px 14px; margin-bottom: 7px;
+      background: linear-gradient(90deg, rgba(88,166,255,0.04), var(--bg2));
+      border-radius: 8px; border-left: 3px solid var(--accent);
+      transition: border-color 0.2s;
+    }
+    .ai-topic-line:hover { border-left-color: var(--pink); }
+
+    /* Todos card */
+    .ai-todo-item {
+      display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 10px;
+      padding: 10px 14px; margin-bottom: 7px;
+      background: var(--bg2); border-radius: 8px;
+      border-left: 2px solid transparent;
+    }
+    .ai-todo-item:has(.ai-todo-pri[style*="var(--red)"]) { border-left-color: rgba(248,81,73,0.35); }
+    .ai-todo-item:has(.ai-todo-pri[style*="var(--orange)"]) { border-left-color: rgba(210,153,29,0.35); }
+    .ai-todo-pri {
+      font-size: 0.62rem; font-weight: 800; color: #fff; letter-spacing: 0.04em;
+      padding: 3px 9px; border-radius: 8px; flex-shrink: 0; text-transform: uppercase;
+    }
+    .ai-todo-who {
+      font-size: 0.73rem; color: var(--orange); font-weight: 700; flex-shrink: 0;
+    }
+    .ai-todo-item-text {
+      font-size: 0.81rem; font-weight: 500; flex: 1; line-height: 1.45;
+    }
+    .ai-todo-ctx {
+      font-size: 0.7rem; color: var(--muted); font-weight: 400;
+      width: 100%; padding-left: 4px; font-style: italic;
+    }
+
+    /* ── Group AI Visualization ── */
+    .gv-topic-row {
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 0; border-bottom: 1px solid var(--border);
+    }
+    .gv-topic-rank { font-size: 1rem; font-weight: 800; min-width: 22px; text-align: center; }
+    .gv-topic-bar-wrap { flex: 1; height: 6px; background: var(--bg); border-radius: 3px; overflow: hidden; }
+    .gv-topic-bar { height: 100%; border-radius: 3px; transition: width 0.6s; }
+    .gv-topic-info { min-width: 0; flex: 2; }
+    .gv-topic-name { font-weight: 600; font-size: 0.8rem; }
+    .gv-topic-kw { font-size: 0.68rem; color: var(--text2); }
+    .gv-topic-sample { font-size: 0.7rem; color: var(--muted); font-style: italic; }
+
+    .gv-member-card {
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 10px; background: var(--bg); border-radius: 6px; margin-bottom: 4px;
+    }
+    .gv-member-avatar {
+      width: 32px; height: 32px; border-radius: 50%; display: flex;
+      align-items: center; justify-content: center; font-size: 1rem;
+    }
+    .gv-member-name { font-weight: 600; font-size: 0.8rem; }
+    .gv-member-style { font-size: 0.7rem; color: var(--text2); }
+    .gv-member-bar-wrap { width: 60px; height: 4px; background: var(--bg2); border-radius: 2px; overflow: hidden; margin-top: 2px; }
+    .gv-member-bar { height: 100%; border-radius: 2px; }
+
+    .gv-vibe-card {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px; border-radius: 8px; margin-bottom: 4px;
+    }
+    .gv-vibe-emoji { font-size: 1.6rem; }
+    .gv-vibe-score { font-size: 1.5rem; font-weight: 800; min-width: 36px; text-align: center; }
+    .gv-vibe-desc { font-size: 0.78rem; line-height: 1.4; }
+
+    .gv-signal-item {
+      display: flex; align-items: flex-start; gap: 8px;
+      padding: 5px 0; border-bottom: 1px solid var(--border);
+    }
+    .gv-signal-icon { font-size: 0.95rem; flex-shrink: 0; }
+    .gv-signal-badge {
+      font-size: 0.62rem; padding: 1px 5px; border-radius: 6px;
+      font-weight: 600; white-space: nowrap;
+    }
+    .gv-signal-content { font-size: 0.8rem; line-height: 1.35; }
+
+    .gv-trace-item {
+      display: flex; align-items: flex-start; gap: 8px;
+      padding: 5px 0; border-bottom: 1px solid var(--border);
+    }
+    .gv-trace-icon {
+      width: 24px; height: 24px; border-radius: 50%; display: flex;
+      align-items: center; justify-content: center; font-size: 0.75rem; flex-shrink: 0;
+    }
+    .gv-trace-time { font-size: 0.65rem; color: var(--muted); white-space: nowrap; min-width: 36px; }
+    .gv-trace-content { font-size: 0.8rem; line-height: 1.35; }
+
+    .gv-role-card {
+      padding: 6px 10px; border-radius: 6px; margin-bottom: 4px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .gv-role-icon { font-size: 1.1rem; flex-shrink: 0; }
+    .gv-role-name { font-weight: 600; font-size: 0.8rem; }
+    .gv-role-members { font-size: 0.72rem; }
+    .gv-role-desc { font-size: 0.68rem; color: var(--text2); }
+  </style>
+</head>
+<body>
+<canvas id="bg-fluid"></canvas>
+  <div class="app" id="mainApp">
+    <!-- Header -->
+    <div class="header">
+      <div class="header-top">
+        <svg class="logo-icon" width="32" height="32" viewBox="0 0 32 32">
+          <rect x="2" y="3" width="24" height="20" rx="5" fill="#58a6ff"/>
+          <polygon points="6,25 3,30 10,25" fill="#58a6ff"/>
+          <rect x="9" y="13" width="2.5" height="6" rx="1" fill="#0d1117"/>
+          <rect x="13.5" y="10" width="2.5" height="9" rx="1" fill="#0d1117"/>
+          <rect x="18" y="8" width="2.5" height="11" rx="1" fill="#0d1117"/>
+        </svg>
+        <h1>微信聊天分析器</h1>
+      </div>
+      <p>
+        从聊天记录中提取关系温度、情绪走势、话题地图 — 不只是看数据，是看懂关系
+      </p>
+    </div>
+
+    <span class="settings-gear" onclick="toggleSettings()" title="设置">⚙️</span>
+
+    <!-- Control Panel -->
+    <div class="panel">
+      <div class="panel-label">开始分析</div>
+      <div class="field contact-field" style="flex:2; min-width:240px;">
+        <label>联系人或群聊</label>
+        <input
+          type="text"
+          id="contactInput"
+          placeholder="输入名称或拼音搜索…"
+          autocomplete="off"
+        />
+        <div class="suggestions" id="suggestions"></div>
+      </div>
+      <div class="field">
+        <label>开始日期</label>
+        <input type="date" id="sinceInput" />
+      </div>
+      <div class="field">
+        <label>结束日期</label>
+        <input type="date" id="untilInput" />
+      </div>
+      <button class="btn btn-primary" id="analyzeBtn" disabled title="请先选择联系人或群聊">
+        开始分析
+      </button>
+    </div>
+
+    <!-- Capabilities Preview -->
+    <div class="capabilities" id="capabilities">
+      <div class="cap-card">
+        <div class="cap-icon">🔍</div>
+        <div class="cap-title">私聊深度分析</div>
+        <div class="cap-desc">消息统计、关系阶段识别、亲密度指数、信号词检测、回复建议</div>
+        <div class="cap-tags">
+          <span class="cap-tag">关系指数</span>
+          <span class="cap-tag">情绪追踪</span>
+          <span class="cap-tag">回复建议</span>
+        </div>
+      </div>
+      <div class="cap-card">
+        <div class="cap-icon">👥</div>
+        <div class="cap-title">群聊全景透视</div>
+        <div class="cap-desc">话题排行榜、成员画像、氛围评估、个人足迹追踪、角色地图</div>
+        <div class="cap-tags">
+          <span class="cap-tag">话题榜</span>
+          <span class="cap-tag">成员画像</span>
+          <span class="cap-tag">氛围分</span>
+        </div>
+      </div>
+      <div class="cap-card">
+        <div class="cap-icon">🤖</div>
+        <div class="cap-title">AI 智能洞察</div>
+        <div class="cap-desc">LLM 驱动的 12 维度分析，从信号解读到待办提取，全方位理解对话</div>
+        <div class="cap-tags">
+          <span class="cap-tag">LLM 驱动</span>
+          <span class="cap-tag">12 维度</span>
+          <span class="cap-tag">智能洞察</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Error -->
+    <div class="error-box" id="errorBox"></div>
+
+    <!-- Loading -->
+    <div class="spinner" id="spinner">
+      <p>正在读取聊天记录<span class="dots"></span></p>
+      <p style="font-size:0.8rem;color:var(--muted);margin-top:8px;">取决于消息量，可能需要 10-30 秒</p>
+    </div>
+
+    <!-- Results -->
+    <div class="results" id="results"></div>
+
+    <!-- Quick Actions -->
+    <nav class="quick-nav" id="scrollNav">
+      <button class="quick-nav-btn top" onclick="scrollToTop()">▲ 顶部</button>
+      <button class="quick-nav-btn screenshot" onclick="captureScreenshot()">📸 截图</button>
+    </nav>
+  </div>
+
+  <!-- ── Settings Modal ── -->
+  <div class="modal-overlay" id="settingsModal" onclick="if(event.target===this) toggleSettings()">
+    <div class="modal" onclick="event.stopPropagation()">
+      <div class="settings-tabs">
+        <button class="settings-tab active" onclick="switchSettingsTab('profile')">👤 个人信息</button>
+        <button class="settings-tab" onclick="switchSettingsTab('llm')">🤖 大模型 API</button>
+        <button class="settings-tab" onclick="switchSettingsTab('security')">🔐 安全设置</button>
+        <button class="settings-tab" onclick="switchSettingsTab('usage')">📊 用量统计</button>
+        <button class="settings-tab" onclick="switchSettingsTab('network')">🌐 网络设置</button>
+      </div>
+
+      <!-- Profile Panel -->
+      <div class="settings-panel active" id="panelProfile">
+        <div class="row">
+          <label>你的微信昵称</label>
+          <input type="text" id="cfgNickname" placeholder="例如：klesen" />
+        </div>
+        <p style="font-size:0.75rem;color:var(--text2);margin-bottom:12px">
+          设置后 AI 分析将以此昵称识别你在聊天中的身份，信息雷达和足迹等分析会更准确。
+        </p>
+        <div class="actions">
+          <button class="btn btn-primary" onclick="saveProfile()">💾 保存</button>
+        </div>
+        <div class="status" id="profileStatus"></div>
+      </div>
+
+      <!-- LLM Panel -->
+      <div class="settings-panel" id="panelLlm">
+        <div class="row">
+          <label>Provider</label>
+          <select id="cfgProvider" onchange="onProviderChange()">
+            <option value="deepseek">DeepSeek</option>
+            <option value="openai">OpenAI</option>
+            <option value="openrouter">OpenRouter</option>
+            <option value="custom">自定义</option>
+          </select>
+        </div>
+        <div class="row">
+          <label>Base URL</label>
+          <input type="text" id="cfgBaseUrl" placeholder="https://api.deepseek.com/v1" />
+        </div>
+        <div class="row">
+          <label>Model</label>
+          <input type="text" id="cfgModel" placeholder="deepseek-chat" />
+        </div>
+        <div class="row">
+          <label>API Key</label>
+          <input type="password" id="cfgApiKey" placeholder="sk-..." />
+        </div>
+        <div class="toggle-row">
+          <span>启用 AI 分析</span>
+          <div class="toggle-switch" id="cfgEnabled" onclick="toggleEnable()"></div>
+        </div>
+        <div class="actions">
+          <button class="btn" onclick="testLLM()" style="background:var(--bg2);color:var(--text)">🔍 测试连接</button>
+          <button class="btn btn-primary" onclick="saveConfig()">💾 保存设置</button>
+        </div>
+        <div class="status" id="cfgStatus"></div>
+      </div>
+
+      <!-- Security Panel -->
+      <div class="settings-panel" id="panelSecurity">
+        <div class="toggle-row">
+          <span>🔐 启用密码保护</span>
+          <div class="toggle-switch" id="pwEnabled" onclick="togglePassword()"></div>
+        </div>
+        <div class="row" id="pwRow">
+          <label>修改密码</label>
+          <input type="password" id="pwNew" placeholder="输入新密码（至少3位）" />
+        </div>
+        <div class="row" id="pwConfirmRow">
+          <label>确认密码</label>
+          <input type="password" id="pwConfirm" placeholder="再次输入新密码" />
+        </div>
+        <div class="actions">
+          <button class="btn btn-primary" onclick="savePassword()">💾 保存安全设置</button>
+        </div>
+        <div class="status" id="pwStatus"></div>
+      </div>
+
+      <!-- Usage Stats Panel -->
+      <div class="settings-panel" id="panelUsage">
+        <div class="usage-overview" style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px">
+          <div class="stat-card" style="padding:14px"><div class="value accent" id="uTotalCalls" style="font-size:1.5rem">--</div><div class="label" style="font-size:0.7rem">总调用次数</div></div>
+          <div class="stat-card" style="padding:14px"><div class="value green" id="uTotalTokens" style="font-size:1.5rem">--</div><div class="label" style="font-size:0.7rem">总 Token</div></div>
+          <div class="stat-card" style="padding:14px"><div class="value orange" id="uInputTokens" style="font-size:1.5rem">--</div><div class="label" style="font-size:0.7rem">输入 Token</div></div>
+          <div class="stat-card" style="padding:14px"><div class="value pink" id="uCost" style="font-size:1.5rem">--</div><div class="label" style="font-size:0.7rem">预估费用</div></div>
+        </div>
+        <div style="margin-bottom:8px;font-size:0.85rem;color:var(--text2);font-weight:600">📋 各功能调用明细</div>
+        <div style="max-height:45vh;overflow-y:auto;margin-bottom:12px">
+          <table style="width:100%;border-collapse:collapse;font-size:0.75rem;table-layout:fixed">
+            <thead>
+              <tr style="border-bottom:1px solid var(--border);color:var(--text2)">
+                <th style="text-align:left;padding:6px 6px;width:30%">功能</th>
+                <th style="text-align:right;padding:6px 4px;width:13%">调用</th>
+                <th style="text-align:right;padding:6px 4px;width:22%">输入Token</th>
+                <th style="text-align:right;padding:6px 4px;width:22%">输出Token</th>
+                <th style="text-align:right;padding:6px 6px;width:13%">占比</th>
+              </tr>
+            </thead>
+            <tbody id="uFnTable"></tbody>
+          </table>
+        </div>
+        <div class="actions" style="display:flex;gap:8px">
+          <button class="btn btn-primary" onclick="loadUsageStats()">🔄 刷新</button>
+          <button class="btn btn-secondary" onclick="resetUsage()">🗑️ 清零</button>
+        </div>
+        <div class="status" id="uStatus"></div>
+      </div>
+
+      <!-- Network Panel -->
+      <div class="settings-panel" id="panelNetwork">
+        <p style="font-size:0.82rem;color:var(--text2);margin-bottom:20px;line-height:1.6">
+          控制是否允许局域网内其他设备访问此服务。修改后需重启服务生效。
+        </p>
+        <div class="toggle-row" style="margin-bottom:16px">
+          <div>
+            <span style="font-weight:600">🌐 允许局域网访问</span>
+            <div style="font-size:0.72rem;color:var(--text2);margin-top:4px;word-break:break-all">
+              开启后同网络设备可通过 <code id="lanIpCode" style="background:var(--bg2);padding:1px 6px;border-radius:4px;font-size:0.7rem;cursor:pointer;transition:background 0.15s;word-break:break-all" title="点击复制地址">http://<span id="lanIpDisplay">--</span>:8899</code><span id="lanCopyHint" style="display:none;color:var(--green);font-size:0.65rem;margin-left:4px">✓ 已复制</span> <a id="lanIpLink" href="http://localhost:8899" target="_blank" style="color:var(--accent);text-decoration:none;font-weight:600;font-size:0.72rem;white-space:nowrap">访问 →</a>
+            </div>
+          </div>
+          <div class="toggle-switch" id="lanEnabled" onclick="toggleLAN()"></div>
+        </div>
+        <div class="status" id="lanStatus"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Identity Picker Modal ── -->
+  <div class="modal-overlay" id="identityPicker" onclick="if(event.target===this) closeIdentityPicker()">
+    <div class="modal" style="width:420px;padding:24px" onclick="event.stopPropagation()">
+      <h2 style="font-size:1rem;margin-bottom:16px">🏷️ 选择身份</h2>
+      <div id="identityOptions" style="display:flex;flex-direction:column;gap:6px"></div>
+      <div id="identityCustomRow" style="display:none;margin-top:12px">
+        <div class="row">
+          <label>新建身份名称</label>
+          <div style="display:flex;gap:8px">
+            <input type="text" id="identityCustomInput" placeholder="输入自定义身份名称..." style="flex:1" maxlength="20">
+            <button class="btn btn-primary" onclick="confirmCustomIdentity()" style="white-space:nowrap">确定</button>
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;justify-content:flex-end;margin-top:12px">
+        <button class="btn btn-secondary" onclick="closeIdentityPicker()" style="font-size:0.8rem">取消</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ── State ──
+    let selectedContact = null; // { name, chat_type, username }
+    let charts = []; // keep references for cleanup
+    let _renderErrors = 0; // diagnostic counter
+
+    // ── Global error catch (diagnostic) ──
+    window.addEventListener("error", function(e) {
+      console.error("[GLOBAL] Uncaught error:", e.message, "\n  at", e.filename, ":", e.lineno);
+    });
+    window.addEventListener("unhandledrejection", function(e) {
+      console.error("[GLOBAL] Unhandled rejection:", e.reason?.message || e.reason);
+    });
+
+    // ── DOM refs ──
+    const contactInput = document.getElementById("contactInput");
+    const suggestions = document.getElementById("suggestions");
+    const sinceInput = document.getElementById("sinceInput");
+    const untilInput = document.getElementById("untilInput");
+    const analyzeBtn = document.getElementById("analyzeBtn");
+    const errorBox = document.getElementById("errorBox");
+    const spinner = document.getElementById("spinner");
+    const resultsDiv = document.getElementById("results");
+
+    // ── Default dates: last 7 days ──
+    const today = new Date();
+    const weekAgo = new Date(today);
+    weekAgo.setDate(weekAgo.getDate() - 7);
+    sinceInput.value = formatDate(weekAgo);
+    untilInput.value = formatDate(today);
+
+    function formatDate(d) {
+      return d.toISOString().split("T")[0];
+    }
+
+    // ── Contact search ──
+    let searchTimer = null;
+    let selectedIdx = -1;
+    let allContactsCache = [];  // preloaded on page load
+    let isComposing = false;    // track IME composition state
+
+    // Generate pinyin search keys for a Chinese name
+    function pinyinKeys(name) {
+      if (!name || typeof pinyinPro === 'undefined') return '';
+      try {
+        // Full pinyin: "zhangyayun"
+        const full = pinyinPro.pinyin(name, { toneType: 'none', type: 'array' }).join('');
+        // Initials: "zyy"
+        const initials = pinyinPro.pinyin(name, { pattern: 'first', toneType: 'none', type: 'array' }).join('');
+        return (full + ' ' + initials).toLowerCase();
+      } catch(e) { return ''; }
+    }
+
+    // Preload all contacts on page load (with timeout + retry)
+    async function preloadContacts() {
+      const MAX_RETRIES = 2;
+      for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+        try {
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 120000); // 2 min timeout
+          const res = await fetch("/api/contacts", { signal: controller.signal });
+          clearTimeout(timeout);
+          const data = await res.json();
+          if (data.ok && data.contacts && data.contacts.length > 0) {
+            allContactsCache = data.contacts.map(c => {
+              c._py = pinyinKeys(c.name);
+              return c;
+            });
+            const q = contactInput.value.trim();
+            if (q || document.activeElement === contactInput) {
+              renderSuggestions(q);
+            }
+            return;
+          }
+        } catch (e) {
+          console.error("Preload contacts attempt " + (attempt+1) + ":", e);
+          if (attempt < MAX_RETRIES) await new Promise(r => setTimeout(r, 2000));
+        }
+      }
+      // All attempts failed — show error state
+      if (allContactsCache.length === 0) {
+        suggestions.innerHTML = '<div class="suggestion-item" style="color:var(--red)">❌ 无法读取联系人列表<br><small>请确认已授权完全磁盘访问权限</small></div>';
+        suggestions.classList.add("active");
+      }
+    }
+
+    // Show suggestions from cache, filtered by query (requires at least 1 char)
+    // Supports: Chinese characters, pinyin full, pinyin initials
+    function renderSuggestions(query) {
+      if (!query) {
+        // No input — hide suggestions, don't show full list
+        suggestions.innerHTML = '';
+        suggestions.classList.remove("active");
+        return;
+      }
+      if (allContactsCache.length === 0) {
+        suggestions.innerHTML = '<div class="suggestion-item" style="color:var(--muted)">⏳ 正在读取联系人列表...</div>';
+        suggestions.classList.add("active");
+        return;
+      }
+      const q = query.toLowerCase();
+      const filtered = allContactsCache.filter(c =>
+        c.name.toLowerCase().includes(q) ||
+        (c._py && c._py.includes(q))
+      );
+
+      suggestions.innerHTML = "";
+      selectedIdx = -1;
+
+      if (!filtered.length) {
+        suggestions.innerHTML =
+          '<div class="suggestion-item" style="color:var(--muted)">未找到匹配的联系人或群聊</div>';
+      } else {
+        // Group by chat_type — friends first, then groups
+        const friends = filtered.filter(c => c.chat_type !== 'group');
+        const groups = filtered.filter(c => c.chat_type === 'group');
+        const addGroup = (label, items) => {
+          if (!items.length) return;
+          const header = document.createElement('div');
+          header.className = 'suggestion-group-header';
+          header.textContent = label;
+          suggestions.appendChild(header);
+          items.forEach((c) => {
+            const div = document.createElement("div");
+            div.className = "suggestion-item";
+            const badgeClass = c.chat_type === "group" ? "group" : "private";
+            const badgeLabel = c.chat_type === "group" ? "群" : "私聊";
+            div.innerHTML = `<span class="badge ${badgeClass}">${badgeLabel}</span><span>${escapeHtml(c.name)}</span>`;
+            div.addEventListener("click", () => selectContact(c));
+            suggestions.appendChild(div);
+          });
+        };
+        addGroup('👤 好友', friends);
+        addGroup('👥 群聊', groups);
+      }
+      suggestions.classList.add("active");
+    }
+
+    // Helper to trigger API fallback search
+    function triggerApiSearch(q) {
+      if (!q) return;
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(() => searchContacts(q), allContactsCache.length === 0 ? 150 : 300);
+    }
+
+    // Focus: show suggestions if input has text
+    contactInput.addEventListener("focus", () => {
+      renderSuggestions(contactInput.value.trim());
+    });
+
+    // ── IME composition handling ──
+    contactInput.addEventListener("compositionstart", () => {
+      isComposing = true;
+    });
+
+    contactInput.addEventListener("compositionend", () => {
+      isComposing = false;
+      // Re-render with the final composed Chinese characters
+      const q = contactInput.value.trim();
+      renderSuggestions(q);
+      // Check if we need API fallback
+      if (q && allContactsCache.length > 0) {
+        const localMatch = allContactsCache.some(c =>
+          c.name.toLowerCase().includes(q.toLowerCase()) ||
+          (c._py && c._py.includes(q.toLowerCase()))
+        );
+        if (!localMatch) triggerApiSearch(q);
+      } else if (q && allContactsCache.length === 0) {
+        triggerApiSearch(q);
+      }
+    });
+
+    contactInput.addEventListener("input", () => {
+      // Skip during IME composition — compositionend handles it
+      if (isComposing) return;
+
+      selectedContact = null;
+      analyzeBtn.disabled = true;
+      const q = contactInput.value.trim();
+      // Try local cache first
+      renderSuggestions(q);
+      // Fall back to API if no local match
+      if (q && allContactsCache.length > 0) {
+        const localMatch = allContactsCache.some(c =>
+          c.name.toLowerCase().includes(q.toLowerCase()) ||
+          (c._py && c._py.includes(q.toLowerCase()))
+        );
+        if (!localMatch) triggerApiSearch(q);
+      } else if (q && allContactsCache.length === 0) {
+        triggerApiSearch(q);
+      }
+    });
+
+    contactInput.addEventListener("keydown", (e) => {
+      const items = suggestions.querySelectorAll(".suggestion-item");
+
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        if (!items.length || !suggestions.classList.contains("active")) return;
+        selectedIdx = Math.min(selectedIdx + 1, items.length - 1);
+        updateSelection(items);
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        if (!items.length || !suggestions.classList.contains("active")) return;
+        selectedIdx = Math.max(selectedIdx - 1, 0);
+        updateSelection(items);
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        if (selectedIdx >= 0 && items.length && items[selectedIdx]) {
+          items[selectedIdx].click();
+        } else if (items.length > 0 && suggestions.classList.contains("active")) {
+          // Auto-select first item when pressing Enter with visible suggestions
+          items[0].click();
+        } else {
+          // No suggestion — fill in name, enable button, let user click manually
+          const name = contactInput.value.trim();
+          if (name) {
+            selectedContact = { name, chat_type: "", username: "" };
+            contactInput.value = name;
+            analyzeBtn.disabled = false;
+            suggestions.classList.remove("active");
+          }
+        }
+      } else if (e.key === "Escape") {
+        suggestions.classList.remove("active");
+      }
+    });
+
+    document.addEventListener("click", (e) => {
+      if (!suggestions.contains(e.target) && e.target !== contactInput) {
+        suggestions.classList.remove("active");
+      }
+    });
+
+    function updateSelection(items) {
+      items.forEach((item, i) => {
+        item.classList.toggle("selected", i === selectedIdx);
+      });
+      if (selectedIdx >= 0 && items[selectedIdx]) {
+        items[selectedIdx].scrollIntoView({ block: "nearest" });
+      }
+    }
+
+    async function searchContacts(q) {
+      try {
+        const res = await fetch(`/api/contacts?q=${encodeURIComponent(q)}`);
+        const data = await res.json();
+        if (!data.ok) return;
+
+        const contacts = data.contacts;
+        suggestions.innerHTML = "";
+        selectedIdx = -1;
+
+        if (!contacts.length) {
+          suggestions.innerHTML =
+            '<div class="suggestion-item" style="color:var(--muted)">未找到匹配的联系人或群聊</div>';
+        } else {
+          contacts.forEach((c) => {
+            const div = document.createElement("div");
+            div.className = "suggestion-item";
+            const badgeClass = c.chat_type === "group" ? "group" : "private";
+            const badgeLabel = c.chat_type === "group" ? "群" : "私聊";
+            div.innerHTML = `
+              <span class="badge ${badgeClass}">${badgeLabel}</span>
+              <span>${escapeHtml(c.name)}</span>
+            `;
+            div.addEventListener("click", () => selectContact(c));
+            suggestions.appendChild(div);
+          });
+        }
+        suggestions.classList.add("active");
+      } catch (err) {
+        console.error("Search error:", err);
+      }
+    }
+
+    function selectContact(c) {
+      selectedContact = c;
+      contactInput.value = c.name;
+      suggestions.classList.remove("active");
+      analyzeBtn.disabled = false;
+    }
+
+    function escapeHtml(str) {
+      const div = document.createElement("div");
+      div.textContent = str;
+      return div.innerHTML;
+    }
+
+    // ── Analyze ──
+    analyzeBtn.addEventListener("click", runAnalysis);
+
+    async function runAnalysis() {
+      if (!selectedContact) return;
+
+      const since = sinceInput.value;
+      const until = untilInput.value;
+      if (!since || !until) {
+        showError("请选择开始和结束日期");
+        return;
+      }
+
+      analyzeBtn.disabled = true;
+      errorBox.classList.remove("active");
+      resultsDiv.classList.remove("active");
+      spinner.classList.add("active");
+      destroyCharts();
+      resultsDiv.innerHTML = "";
+      // Hide capabilities preview during analysis
+      var capEl = document.getElementById("capabilities");
+      if (capEl) capEl.style.display = "none";
+
+      // Clear any previous unhandled error indicators
+      if (window._lastRenderError) {
+        console.warn("[render] previous render had error, cleared");
+        window._lastRenderError = null;
+      }
+
+      try {
+        const res = await fetch("/api/analyze", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contact: selectedContact.name,
+            username: selectedContact.username || "",
+            since,
+            until,
+            chat_type: selectedContact.chat_type,
+          }),
+        });
+
+        const data = await res.json();
+        if (!data.ok) {
+          showError(data.error || "分析失败");
+          spinner.classList.remove("active");
+          analyzeBtn.disabled = false;
+          return;
+        }
+
+        spinner.classList.remove("active");
+        console.log("[render] calling renderResults with data keys:", Object.keys(data.data || {}).join(", "));
+        try {
+          renderResults(data.data);
+        } catch (renderErr) {
+          console.error("[render] renderResults threw:", renderErr.message, renderErr.stack);
+          showError("渲染结果失败: " + renderErr.message);
+          analyzeBtn.disabled = false;
+          return;
+        }
+        console.log("[render] renderResults completed, html length:", resultsDiv.innerHTML.length);
+        resultsDiv.classList.add("active");
+        document.getElementById("scrollNav").classList.add("visible");
+        analyzeBtn.disabled = false;
+
+        // Scroll to results
+        resultsDiv.scrollIntoView({ behavior: "smooth", block: "start" });
+      } catch (err) {
+        showError("网络错误: " + err.message);
+        spinner.classList.remove("active");
+        analyzeBtn.disabled = false;
+      }
+    }
+
+    function showError(msg) {
+      errorBox.textContent = "❌ " + msg;
+      errorBox.classList.add("active");
+      // Show capabilities again on error
+      var capEl = document.getElementById("capabilities");
+      if (capEl) capEl.style.display = "";
+    }
+
+    function destroyCharts() {
+      charts.forEach((c) => c.destroy());
+      charts = [];
+    }
+
+    // ── Render ──
+    function renderResults(data) {
+      // Store messages for LLM use (normalize format: private uses 'who', group uses 'sender')
+      const raw = data.messages || data.recent_messages || [];
+      window._lastMessages = raw.map(m => ({
+        sender: m.who || m.sender || "",
+        content: m.content || "",
+        time: m.time || ""
+      }));
+      window._lastChatName = data.chat_name || data.contact || selectedContact?.name || "";
+      window._lastIdentity = (data.identity || {}).identity || "lover";
+      window._lastChatType = data.chat_type || (data.engagement_tiers ? "group" : "private");
+      window._lastUserName = window._configuredNickname || data.user_name || "";
+      // Detect chat type by data shape: group has engagement_tiers, private has intimacy
+      if (data.engagement_tiers || (data.chat_type === "group")) {
+        renderGroupResults(data);
+      } else {
+        renderPrivateResults(data);
+      }
+      // Add LLM panel
+      if (window._lastMessages.length > 0) {
+        renderLLMPanel(window._lastChatName, window._lastMessages, window._lastIdentity, window._lastChatType);
+        // Auto-run AI analysis
+        setTimeout(() => autoRunLLM(), 300);
+      }
+    }
+
+    function renderGroupResults(data) {
+      const d = data;
+      const stats = d.stats || {};
+      const byType = d.by_type || [];
+      const byHour = d.by_hour || [];
+      const topSenders = d.top_senders || [];
+      const tiers = d.engagement_tiers || [];
+      const dailyTrend = d.daily_trend || [];
+      const weekdayTrend = d.weekday_trend || [];
+      const content = d.content_features || {};
+      const rhythm = d.rhythm || {};
+      const topics = d.topics || [];
+      const detailedTopics = d.detailed_topics || [];
+      const topicTrends = d.topic_trends || {};
+      const recent = d.recent_messages || [];
+
+      // Safety: if no group-specific fields, it's likely private data
+      if (!tiers.length && !dailyTrend.length && d.intimacy) {
+        renderPrivateResults(data);
+        return;
+      }
+
+      let html = '<div style="text-align:center;padding:4px 0 16px;color:var(--accent);font-size:0.8rem">📊 群聊分析模式</div>';
+
+      // ═══ Stats Overview ═══
+      const peakInfo = stats.peak_hour !== undefined ? `${String(stats.peak_hour).padStart(2,'0')}:00 ${stats.peak_label||''}` : '';
+      html += `
+        <div class="stats-grid">
+          <div class="stat-card"><div class="value accent">${stats.total || 0}</div><div class="label">总消息数</div></div>
+          <div class="stat-card"><div class="value green">${stats.daily_avg || 0}</div><div class="label">日均消息</div></div>
+          <div class="stat-card"><div class="value orange">${stats.active_members || 0}</div><div class="label">活跃成员</div></div>
+          <div class="stat-card"><div class="value pink">${stats.active_days || 0}天</div><div class="label">活跃天数</div></div>
+        </div>
+      `;
+
+      // ═══ Daily trend ═══
+      if (dailyTrend.length > 1) {
+        html += `
+          <div class="section">
+            <h2 class="section-title">📈 每日趋势</h2>
+            <div class="chart-box" style="height:260px"><canvas id="grpDailyChart"></canvas></div>
+          </div>
+        `;
+      }
+
+      // ═══ Engagement Tiers ═══
+      if (tiers.length) {
+        html += `
+          <div class="section">
+            <h2 class="section-title">👥 成员参与度分层</h2>
+            <div class="chart-row">
+              <div><div class="chart-box" style="height:260px"><canvas id="tiersPie"></canvas></div></div>
+              <div class="tier-list">
+                ${tiers.map(t => `
+                  <div class="tier-card">
+                    <div class="tier-header">
+                      <span class="tier-name">${t.tier}</span>
+                      <span class="tier-pct">${t.msg_pct}%</span>
+                    </div>
+                    <div class="tier-bar-wrap"><div class="tier-bar" style="width:${t.msg_pct}%"></div></div>
+                    <div class="tier-detail">${t.count}人 · ${t.msg_total}条</div>
+                    ${t.top_members ? `<div class="tier-members">${t.top_members.slice(0,2).map(n=>escapeHtml(n)).join('、')}</div>` : ''}
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          </div>
+        `;
+      }
+
+      // ═══ Charts row (type + hourly) ═══
+      html += `
+        <div class="section">
+          <h2 class="section-title">📊 数据图表</h2>
+          <div class="chart-row">
+            <div><div class="chart-box"><canvas id="typeChartG"></canvas></div></div>
+            <div><div class="chart-box"><canvas id="hourlyChartG"></canvas></div></div>
+          </div>
+        </div>
+      `;
+
+      // ═══ Top Senders ═══
+      if (topSenders.length) {
+        html += `
+          <div class="section">
+            <h2 class="section-title">🏆 发言排行榜</h2>
+            <div class="sender-list">
+              ${topSenders.slice(0, 15).map((s, i) => {
+                const maxCount = topSenders[0]?.count || 1;
+                const pct = Math.round((s.count / Math.max(stats.total||1, 1)) * 100);
+                const barW = Math.round((s.count / maxCount) * 100);
+                const rankClass = i === 0 ? 'r1' : i === 1 ? 'r2' : i === 2 ? 'r3' : 'rn';
+                const barColor = i === 0 ? 'var(--orange)' : i === 1 ? 'var(--accent)' : i === 2 ? '#8b5a2b' : 'var(--muted)';
+                return `
+                  <div class="sender-row">
+                    <div class="sender-num ${rankClass}">${i + 1}</div>
+                    <div class="sender-name">${escapeHtml(s.sender)}</div>
+                    <div class="sender-bar-wrap"><div class="sender-bar" style="width:${barW}%;background:${barColor}"></div></div>
+                    <div class="sender-count">${s.count}<span style="font-size:0.7rem;color:var(--muted)"> ${pct}%</span></div>
+                  </div>
+                `;
+              }).join("")}
+            </div>
+          </div>
+        `;
+      }
+
+      // ═══ Content Features + Rhythm ═══
+      html += `
+        <div class="section">
+          <h2 class="section-title">🔬 内容特征 & 群聊节奏</h2>
+          <div class="dynamics-grid">
+            <div class="dyn-card">
+              <div class="dyn-icon">📝</div>
+              <div class="dyn-title">平均消息长度</div>
+              <div class="dyn-value">${content.avg_msg_len || 0}字</div>
+            </div>
+            <div class="dyn-card">
+              <div class="dyn-icon">🖼️</div>
+              <div class="dyn-title">图片占比</div>
+              <div class="dyn-value">${content.image_pct || 0}%</div>
+            </div>
+            <div class="dyn-card">
+              <div class="dyn-icon">🔗</div>
+              <div class="dyn-title">链接分享</div>
+              <div class="dyn-value">${content.link_pct || 0}%</div>
+            </div>
+            <div class="dyn-card">
+              <div class="dyn-icon">😄</div>
+              <div class="dyn-title">表情使用</div>
+              <div class="dyn-value">${content.emoji_pct || 0}%</div>
+            </div>
+            <div class="dyn-card">
+              <div class="dyn-icon">⏱️</div>
+              <div class="dyn-title">平均消息间隔</div>
+              <div class="dyn-value">${rhythm.avg_interval_sec || 0}s</div>
+            </div>
+            <div class="dyn-card">
+              <div class="dyn-icon">💥</div>
+              <div class="dyn-title">消息爆发点</div>
+              <div class="dyn-value">${rhythm.burst_count || 0}次</div>
+            </div>
+            <div class="dyn-card">
+              <div class="dyn-icon">🌙</div>
+              <div class="dyn-title">冷场时段</div>
+              <div class="dyn-sub" style="font-size:0.85rem;color:var(--text)">${rhythm.quiet_hours || ''}</div>
+            </div>
+            <div class="dyn-card">
+              <div class="dyn-icon">🔥</div>
+              <div class="dyn-title">最活跃日</div>
+              <div class="dyn-value" style="font-size:1.2rem">${rhythm.most_active_day || ''}</div>
+            </div>
+          </div>
+        </div>
+      `;
+
+      // ═══ Weekday pattern ═══
+      if (weekdayTrend.length) {
+        html += `
+          <div class="section">
+            <h2 class="section-title">📅 星期分布</h2>
+            <div class="chart-box" style="height:240px"><canvas id="weekdayChart"></canvas></div>
+          </div>
+        `;
+      }
+
+      // ═══ Topics (Group) ═══
+      const displayTopics = detailedTopics.length ? detailedTopics : topics;
+      if (displayTopics.length) {
+        const trends = topicTrends || {};
+        const visibleTopics = displayTopics.slice(0, 5);
+        const hiddenTopics = displayTopics.slice(5);
+        const maxPct = displayTopics[0]?.pct || 1;
+        html += `
+          <div class="section">
+            <h2 class="section-title">💬 热门话题</h2>
+            <div class="topic-rank-list">
+              ${visibleTopics.map((t, i) => {
+                const barW = Math.max(3, Math.round((t.pct || 0) / maxPct * 100));
+                const trend = trends[t.topic];
+                let trendHTML = "";
+                if (trend && trend.change > 20) trendHTML = `<span class="topic-trend up">↑${trend.change}%</span>`;
+                else if (trend && trend.change < -20) trendHTML = `<span class="topic-trend down">↓${Math.abs(trend.change)}%</span>`;
+                return `
+                  <div class="topic-rank-item">
+                    <span class="topic-dot" style="background:${t.color||'#8b949e'}"></span>
+                    <span class="topic-rank-name">${escapeHtml(t.topic)}</span>
+                    <div class="topic-rank-bar-wrap"><div class="topic-rank-bar" style="width:${barW}%;background:${t.color||'var(--accent)'}"></div></div>
+                    <span class="topic-rank-pct">${t.pct || ''}${t.pct ? '%' : ''}</span>
+                    ${trendHTML}
+                    <span class="topic-rank-kw">${(t.top_keywords||[]).slice(0,3).join(' · ')}</span>
+                    ${t.sample_msg ? `<span class="topic-rank-msg">${escapeHtml(t.sample_msg)}</span>` : ''}
+                  </div>
+                `;
+              }).join('')}
+              ${hiddenTopics.length ? `
+                <div class="topic-hidden">
+                  ${hiddenTopics.map((t, i) => {
+                    const barW = Math.max(3, Math.round((t.pct || 0) / maxPct * 100));
+                    const trend = trends[t.topic];
+                    let trendHTML = "";
+                    if (trend && trend.change > 20) trendHTML = `<span class="topic-trend up">↑${trend.change}%</span>`;
+                    else if (trend && trend.change < -20) trendHTML = `<span class="topic-trend down">↓${Math.abs(trend.change)}%</span>`;
+                    return `
+                      <div class="topic-rank-item">
+                        <span class="topic-dot" style="background:${t.color||'#8b949e'}"></span>
+                        <span class="topic-rank-name">${escapeHtml(t.topic)}</span>
+                        <div class="topic-rank-bar-wrap"><div class="topic-rank-bar" style="width:${barW}%;background:${t.color||'var(--accent)'}"></div></div>
+                        <span class="topic-rank-pct">${t.pct || ''}${t.pct ? '%' : ''}</span>
+                        ${trendHTML}
+                        <span class="topic-rank-kw">${(t.top_keywords||[]).slice(0,3).join(' · ')}</span>
+                        ${t.sample_msg ? `<span class="topic-rank-msg">${escapeHtml(t.sample_msg)}</span>` : ''}
+                      </div>
+                    `;
+                  }).join('')}
+                </div>
+                <button class="topic-expand-btn" onclick="var h=this.previousElementSibling;var o=h.classList.toggle('open');this.textContent=o?'收起 ▴':'展开全部 '+${displayTopics.length}+' 个话题 ▾'">展开全部 ${displayTopics.length} 个话题 ▾</button>
+              ` : ''}
+            </div>
+          </div>
+        `;
+      }
+
+      // ═══ Recent messages ═══
+      if (recent.length) {
+        html += `
+          <div class="section">
+            <h2 class="section-title">📝 最近消息</h2>
+            <div class="msg-list">
+              ${recent.map(m => `
+                <div class="msg-item">
+                  <span class="msg-time">${escapeHtml(m.time)}</span>
+                  <span class="msg-who" style="color:var(--accent)">${escapeHtml(m.sender)}</span>
+                  <span class="msg-body">${escapeHtml(m.content)}</span>
+                </div>
+              `).join("")}
+            </div>
+          </div>
+        `;
+      }
+
+      resultsDiv.innerHTML = html;
+
+      // ── Render all charts ──
+      renderDoughnut("typeChartG", byType.map(t => t.type), byType.map(t => t.count));
+      renderHourlyBar("hourlyChartG", byHour);
+      if (dailyTrend.length > 1) renderGroupDailyChart("grpDailyChart", dailyTrend);
+      if (tiers.length) renderTiersPie("tiersPie", tiers);
+      if (weekdayTrend.length) renderWeekdayChart("weekdayChart", weekdayTrend);
+    }
+
+    function renderPrivateResults(data) {
+      const d = data;
+      const stats = d.stats || {};
+      const byType = d.by_type || [];
+      const byHour = d.by_hour || [];
+      const reply = d.reply_stats || {};
+      const topics = d.topics || [];
+      const recent = d.recent_messages || [];
+      const dailyBd = d.daily_breakdown || [];
+      const phases = d.phases || {};
+      const intimacy = d.intimacy || {};
+      const signals = d.signals || {};
+      const dynamics = d.dynamics || {};
+      const advice = d.advice || [];
+      const monthly = d.monthly_trend || [];
+
+      let html = '';
+
+      // ═══ Identity Panel (extract early for title icon) ═══
+      const identity = d.identity || {};
+      const idLabel = identity.custom_label || identity.label || '未识别';
+      const idIcon = identity.icon || '👤';
+
+      html += `<div style="text-align:center;padding:4px 0 16px;color:var(--pink);font-size:0.8rem">${idIcon} 私聊分析模式 · ${idLabel}</div>`;
+      const genderIcon = identity.gender_icon || '';
+      const genderLabel = identity.gender_label || '';
+      html += `
+        <div class="section">
+          <h2 class="section-title">🏷️ 身份看板</h2>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start">
+            <!-- Left: main identity -->
+            <div>
+              <div style="display:flex;align-items:center;gap:14px;margin-bottom:12px">
+                <span style="font-size:2.4rem">${idIcon}</span>
+                <div style="flex:1">
+                  <div style="font-size:1.2rem;font-weight:700;margin-bottom:2px" id="identityLabel">
+                    ${escapeHtml(idLabel)}${genderIcon ? ' <span style="font-size:0.9rem">'+genderIcon+'</span>' : ''}
+                    ${genderLabel && genderLabel !== '未知' ? `<span style="font-size:0.7rem;color:var(--text2);margin-left:4px">${genderLabel}</span>` : ''}
+                  </div>
+                  ${identity.has_custom ? '<span style="font-size:0.7rem;color:var(--green);background:rgba(63,185,80,0.12);padding:2px 8px;border-radius:8px">✏️ 已自定义</span>' : ''}
+                </div>
+              </div>
+              <!-- Confidence bar -->
+              <div style="margin-bottom:10px">
+                <div style="display:flex;justify-content:space-between;font-size:0.75rem;color:var(--text2);margin-bottom:4px">
+                  <span>置信度</span><span style="font-weight:600;color:var(--accent)">${identity.confidence || 0}%</span>
+                </div>
+                <div style="height:6px;background:var(--bg);border-radius:3px;overflow:hidden">
+                  <div style="height:100%;width:${identity.confidence || 0}%;background:linear-gradient(90deg,var(--accent),var(--pink));border-radius:3px;transition:width 0.6s"></div>
+                </div>
+              </div>
+              ${(identity.features || []).length ? `
+                <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px">
+                  ${identity.features.map(f => `<span class="topic-tag-sm">${escapeHtml(f)}</span>`).join('')}
+                </div>
+              ` : ''}
+              <div style="display:flex;gap:8px">
+                <button class="btn btn-secondary" style="padding:4px 12px;font-size:0.75rem" onclick="showIdentityPicker('${escapeHtml(d.contact).replace(/'/g,"\\\\'")}','${escapeHtml(identity.identity||'').replace(/'/g,"\\\\'")}')">🏷️ 选择身份</button>
+                ${identity.has_custom ? `<button class="btn btn-secondary" style="padding:4px 12px;font-size:0.75rem" onclick="deleteIdentityTag('${escapeHtml(d.contact).replace(/'/g,"\\\\'")}')">🗑️ 恢复自动</button>` : ''}
+              </div>
+            </div>
+            <!-- Right: alternative identity scores -->
+            <div>
+              <div style="font-size:0.85rem;color:var(--text2);margin-bottom:8px;font-weight:500">备选身份评分</div>
+              ${(identity.all_scores && Object.keys(identity.all_scores).length) ? Object.entries(identity.all_scores).map(([key, val]) => {
+                const icons = {lover:'💕',family:'👨‍👩‍👧',business:'💼',colleague:'🏢',service:'📞',friend:'🤝'};
+                const names = {lover:'恋人',family:'家人',business:'合作伙伴',colleague:'同事',service:'客服',friend:'朋友'};
+                const isWinner = key === (identity.identity || '');
+                const maxScore = Math.max(...Object.values(identity.all_scores), 1);
+                const barW = Math.max(3, Math.round(val / maxScore * 100));
+                return `
+                  <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;padding:4px 0;${isWinner ? 'background:rgba(88,166,255,0.06);border-radius:6px;padding:4px 8px;margin-left:-4px' : ''}">
+                    <span style="font-size:0.9rem">${icons[key]||'👤'}</span>
+                    <span style="font-size:0.8rem;font-weight:${isWinner?'700':'400'};color:${isWinner?'var(--accent)':'var(--text)'};min-width:50px">${names[key]||key}</span>
+                    <div style="flex:1;height:5px;background:var(--bg);border-radius:2px;overflow:hidden">
+                      <div style="height:100%;width:${barW}%;background:${isWinner?'var(--accent)':'var(--muted)'};border-radius:2px"></div>
+                    </div>
+                    <span style="font-size:0.7rem;color:var(--text2);min-width:28px;text-align:right">${val}</span>
+                  </div>
+                `;
+              }).join('') : '<div style="font-size:0.8rem;color:var(--muted);padding:8px 0">数据不足</div>'}
+            </div>
+          </div>
+        </div>
+      `;
+
+      // ═══ Phase + Intimacy (top row) ═══
+      html += `<div class="phase-intimacy-row">`;
+
+      // Phase card
+      html += `
+        <div class="section" style="flex:1">
+          <h2 class="section-title">📊 关系阶段</h2>
+          <div class="phase-card">
+            <div class="phase-label">${phases.label || '分析中...'}</div>
+            <div class="phase-desc">${phases.ai_description || phases.description || ''}</div>
+            ${(phases.timeline || []).length ? `
+            <div class="phase-timeline">
+              ${phases.timeline.map((t, i) => {
+                const maxV = Math.max(...phases.timeline.map(x => x.total), 1);
+                const h = Math.max(8, Math.round(t.total / maxV * 80));
+                return `<div class="phase-bar-col" title="${t.month}: ${t.total}条">
+                  <div class="phase-bar" style="height:${h}px;background:linear-gradient(180deg,var(--accent),var(--pink))"></div>
+                  <span class="phase-bar-label">${t.month.slice(5)}</span>
+                </div>`;
+              }).join('')}
+            </div>` : ''}
+          </div>
+        </div>
+      `;
+
+      // Index score — title adapts to identity
+      const idKey = identity.identity || 'lover';
+      const INDEX_TITLES = {
+        lover: '💯 亲密度指数', friend: '🤝 友谊指数',
+        colleague: '🏢 同事指数', family: '👨‍👩‍👧 亲情指数',
+        business: '💼 协作指数', service: '📞 服务指数',
+      };
+      html += `
+        <div class="section" style="flex:1">
+          <h2 class="section-title">${INDEX_TITLES[idKey] || '💯 亲密度指数'}</h2>
+          <div class="intimacy-card">
+            <div class="intimacy-big">${intimacy.total || 0}</div>
+            <div class="intimacy-label">/ 100 — ${intimacy.label || ''}</div>
+            ${(intimacy.sub_scores || []).map(s => `
+              <div class="intimacy-row">
+                <span class="intimacy-name">${s.name}</span>
+                <div class="intimacy-bar-wrap">
+                  <div class="intimacy-bar" style="width:${s.score}%;background:${s.score>70?'var(--green)':s.score>40?'var(--accent)':'var(--orange)'}"></div>
+                </div>
+                <span class="intimacy-val">${s.score}</span>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+      html += `</div>`; // phase-intimacy-row
+
+      // ═══ Basic Stats ═══
+      html += `
+        <div class="stats-grid">
+          <div class="stat-card"><div class="value accent">${stats.total || 0}</div><div class="label">总消息数</div></div>
+          <div class="stat-card"><div class="value green">${stats.daily_avg || 0}</div><div class="label">日均消息</div></div>
+          <div class="stat-card"><div class="value orange">${stats.her_count || 0}<span style="font-size:1rem"> / ${stats.me_count || 0}</span></div><div class="label">她 / 你</div></div>
+          <div class="stat-card"><div class="value pink">${d.date_range || ''}</div><div class="label">时间范围</div></div>
+        </div>
+      `;
+
+      // ═══ Signals Chart ═══
+      if (signals.signals && signals.signals.length) {
+        html += `
+          <div class="section">
+            <h2 class="section-title">🔍 情绪信号分析</h2>
+            <p class="signal-summary">${escapeHtml(signals.summary || '')}</p>
+            <div class="chart-box" style="height:280px"><canvas id="signalsChart"></canvas></div>
+            <div class="signal-words">
+              ${signals.signals.map(s => `
+                <div class="signal-word-group">
+                  <span class="sw-icon">${s.icon}</span>
+                  <span class="sw-name">${s.name}</span>
+                  <span class="sw-density">${s.density}/千条</span>
+                  <span class="sw-words">${(s.top_words||[]).slice(0,3).join(' · ')}</span>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        `;
+      }
+
+      // ═══ Interaction Dynamics ═══
+      html += `
+        <div class="section">
+          <h2 class="section-title">🔄 互动动态</h2>
+          <div class="dynamics-grid">
+            <div class="dyn-card">
+              <div class="dyn-icon">☀️</div>
+              <div class="dyn-title">每日首发</div>
+              <div class="dyn-values">
+                <span style="color:var(--pink)">她 ${dynamics.initiator ? dynamics.initiator.her_pct : 50}%</span>
+                <span style="color:var(--muted)"> / </span>
+                <span style="color:var(--green)">你 ${dynamics.initiator ? dynamics.initiator.me_pct : 50}%</span>
+              </div>
+            </div>
+            <div class="dyn-card">
+              <div class="dyn-icon">🌙</div>
+              <div class="dyn-title">深夜聊天</div>
+              <div class="dyn-value">${dynamics.late_night_pct || 0}%</div>
+              <div class="dyn-sub">22:00-03:00 消息占比</div>
+            </div>
+            <div class="dyn-card">
+              <div class="dyn-icon">💬</div>
+              <div class="dyn-title">发言节奏</div>
+              <div class="dyn-values">
+                <span style="color:var(--pink)">她 ${dynamics.streaks ? dynamics.streaks.her_avg : 0}条/段</span>
+                <span style="color:var(--muted)"> / </span>
+                <span style="color:var(--green)">你 ${dynamics.streaks ? dynamics.streaks.me_avg : 0}条/段</span>
+              </div>
+            </div>
+            <div class="dyn-card">
+              <div class="dyn-icon">🎤</div>
+              <div class="dyn-title">语音偏好</div>
+              <div class="dyn-value">${dynamics.voice ? dynamics.voice.her_voice_pct : 0}%</div>
+              <div class="dyn-sub">她发语音占比</div>
+            </div>
+          </div>
+        </div>
+      `;
+
+      // ═══ Charts (type + hourly) ═══
+      html += `
+        <div class="section">
+          <h2 class="section-title">📈 数据图表</h2>
+          <div class="chart-row">
+            <div><div class="chart-box"><canvas id="typeChartP"></canvas></div></div>
+            <div><div class="chart-box"><canvas id="hourlyChartP"></canvas></div></div>
+          </div>
+        </div>
+      `;
+
+      // ═══ Monthly trend ═══
+      if (monthly.length > 1) {
+        html += `
+          <div class="section">
+            <h2 class="section-title">📅 月度趋势</h2>
+            <div class="chart-box" style="height:260px"><canvas id="monthlyChart"></canvas></div>
+          </div>
+        `;
+      }
+
+      // ═══ Reply Stats ═══
+      if (reply.total_exchanges) {
+        const fastestMin = reply.fastest_sec < 60 ? `${reply.fastest_sec}秒` : `${Math.round(reply.fastest_sec / 60)}分`;
+        const medianMin = reply.median_sec < 60 ? `${reply.median_sec}秒` : `${Math.round(reply.median_sec / 60)}分`;
+        const slowestMin = Math.round(reply.slowest_sec / 60);
+        html += `
+          <div class="section">
+            <h2 class="section-title">⏱️ 回复速度</h2>
+            <table class="info-table">
+              <tr><td>最快</td><td>${fastestMin}</td></tr>
+              <tr><td>中位</td><td>${medianMin}</td></tr>
+              <tr><td>最慢</td><td>${slowestMin}分钟</td></tr>
+              <tr><td>1分钟内回复</td><td>${reply.under_1min || 0} / ${reply.total_exchanges} 次</td></tr>
+              <tr><td>5分钟内回复</td><td>${reply.under_5min || 0} / ${reply.total_exchanges} 次</td></tr>
+            </table>
+          </div>
+        `;
+      }
+
+      // ═══ Development Advice ═══
+      if (advice.length) {
+        html += `
+          <div class="section">
+            <h2 class="section-title">💡 关系发展建议</h2>
+            <div class="advice-grid">
+              ${advice.map((a, i) => `
+                <div class="advice-card" style="border-left: 3px solid ${i===0?'var(--pink)':i===1?'var(--accent)':'var(--green)'}">
+                  <div class="advice-header">
+                    <span class="advice-icon">${a.icon || '💡'}</span>
+                    <span class="advice-priority">P${a.priority || i+1}</span>
+                  </div>
+                  <div class="advice-title">${escapeHtml(a.title || '')}</div>
+                  <div class="advice-detail">${escapeHtml(a.detail || '')}</div>
+                  ${(a.topics || []).length ? `
+                    <div class="advice-topics">
+                      ${a.topics.map(t => `<div class="advice-topic-item">💬 ${escapeHtml(t)}</div>`).join('')}
+                    </div>
+                  ` : ''}
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        `;
+      }
+
+      // ═══ Daily trend ═══
+      if (dailyBd.length > 1) {
+        html += `
+          <div class="section">
+            <h2 class="section-title">📅 每日趋势</h2>
+            <div class="daily-chart"><canvas id="dailyChart"></canvas></div>
+          </div>
+        `;
+      }
+
+      // ═══ Relationship Insights (replaces old hot topics) ═══
+      html += `
+        <div class="section">
+          <h2 class="section-title">📊 关系洞察</h2>
+
+          <div style="margin-bottom:18px;font-size:0.85rem;color:var(--text2)">
+            亲密度指数 <span style="font-size:1.4rem;font-weight:700;color:var(--accent)">${intimacy.total || 0}</span>/100 — ${intimacy.label || ''}
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px">
+            ${(intimacy.sub_scores || []).map(s => {
+              const barColor = s.score > 70 ? 'var(--green)' : s.score > 40 ? 'var(--accent)' : 'var(--orange)';
+              const statusIcon = s.alert ? '⚠️' : '✅';
+              return `
+                <div style="display:flex;align-items:center;gap:10px">
+                  <span style="font-size:0.78rem;color:var(--text2);width:70px;text-align:right;flex-shrink:0">${s.name}</span>
+                  <span style="font-size:0.8rem;font-weight:600;width:36px;color:${barColor}">${s.score}</span>
+                  <div style="flex:1;height:6px;background:var(--bg2);border-radius:3px;overflow:hidden">
+                    <div style="height:100%;width:${s.score}%;background:${barColor};border-radius:3px"></div>
+                  </div>
+                  <span style="font-size:0.8rem">${statusIcon}</span>
+                </div>
+                ${s.alert && s.tip ? `<div style="font-size:0.72rem;color:var(--orange);padding-left:116px;margin-bottom:2px">💡 ${escapeHtml(s.tip)}</div>` : ''}
+              `;
+            }).join('')}
+          </div>
+
+          <div style="margin-bottom:14px;font-size:0.8rem;color:var(--text2);font-weight:600">情绪信号</div>
+          <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">
+            ${(signals.signals || []).map(s => {
+              const maxDensity = Math.max(s.density, s.benchmark || 5);
+              const barPct = Math.min(100, Math.round(s.density / maxDensity * 100));
+              const overBench = s.density >= (s.benchmark || 999) ? '✅' : '⚠️';
+              return `
+                <div style="display:flex;align-items:center;gap:8px">
+                  <span style="font-size:0.78rem;width:40px;text-align:right">${s.icon} ${s.name}</span>
+                  <span style="font-size:0.75rem;font-weight:600;width:48px">${s.density}/千条</span>
+                  <div style="flex:1;height:4px;background:var(--bg2);border-radius:2px;overflow:hidden;position:relative">
+                    <div style="height:100%;width:${barPct}%;background:${s.color};border-radius:2px"></div>
+                    <div style="position:absolute;left:${Math.round(s.benchmark/maxDensity*100)}%;top:-3px;width:1px;height:10px;background:var(--text2);opacity:0.5" title="基准线: ${s.benchmark}"></div>
+                  </div>
+                  <span style="font-size:0.7rem">${overBench}</span>
+                </div>
+              `;
+            }).join('')}
+            <div style="font-size:0.65rem;color:var(--muted);padding-left:48px">竖线 = 健康基准线</div>
+          </div>
+
+          ${topics.length ? `
+            <div class="section">
+              <h2 class="section-title">🗣️ 话题分布 <span style="font-size:0.7rem;color:var(--muted);font-weight:400;margin-left:8px">${sinceInput.value} — ${untilInput.value}</span></h2>
+              <div class="chart-box" style="height:340px"><canvas id="topicsRadar"></canvas></div>
+              <div id="topicsBalance" style="margin-top:12px"></div>
+            </div>
+          ` : ''}
+        </div>
+      `;
+
+      // ═══ Recent Messages ═══
+      if (recent.length) {
+        html += `
+          <div class="section">
+            <h2 class="section-title">📝 最近消息</h2>
+            <div class="msg-list">
+              ${recent.map(m => `
+                <div class="msg-item">
+                  <span class="msg-time">${escapeHtml(m.time)}</span>
+                  <span class="msg-who ${m.who === d.other_name ? 'her' : 'me'}">${escapeHtml(m.who)}</span>
+                  <span class="msg-body">${escapeHtml(m.content)}</span>
+                </div>
+              `).join("")}
+            </div>
+          </div>
+        `;
+      }
+
+      resultsDiv.innerHTML = html;
+
+      // ── Render all charts ──
+      renderDoughnut("typeChartP", byType.map(t => t.type), byType.map(t => t.count));
+      renderHourlyBar("hourlyChartP", byHour);
+      if (dailyBd.length > 1) renderDailyChart("dailyChart", dailyBd, d.other_name, d.user_name);
+      if (monthly.length > 1) renderMonthlyChart("monthlyChart", monthly, d.other_name, d.user_name);
+      if (signals.signals && signals.signals.length) renderSignalsChart("signalsChart", signals.signals);
+      if (topics.length) renderTopicsRadar("topicsRadar", topics);
+    }
+
+    // ── Chart helpers ──
+    function chartOk(canvasId) {
+      if (typeof Chart === 'undefined') return false;
+      return !!document.getElementById(canvasId);
+    }
+    function renderDoughnut(canvasId, labels, data) {
+      if (!chartOk(canvasId)) return;
+      const ctx = document.getElementById(canvasId);
+      const colors = ['#58a6ff', '#d2991d', '#3fb950', '#db61a2', '#a371f7', '#8b949e', '#f85149', '#79c0ff'];
+      const chart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels,
+          datasets: [{ data, backgroundColor: colors.slice(0, data.length), borderWidth: 0 }],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          cutout: '60%',
+          plugins: {
+            legend: {
+              position: 'right',
+              labels: { color: '#8b949e', padding: 16, font: { size: 12 } },
+            },
+          },
+        },
+      });
+      charts.push(chart);
+    }
+
+    function renderHourlyBar(canvasId, data) {
+      if (!chartOk(canvasId)) return;
+      const ctx = document.getElementById(canvasId);
+      const maxVal = Math.max(...data, 1);
+      const chart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: Array.from({ length: 24 }, (_, i) => `${String(i).padStart(2, '0')}:00`),
+          datasets: [{
+            label: '消息数',
+            data,
+            backgroundColor: data.map(v => {
+              const r = v / maxVal;
+              return r > 0.7 ? 'rgba(88,166,255,0.9)'
+                   : r > 0.4 ? 'rgba(88,166,255,0.6)'
+                   : r > 0.1 ? 'rgba(88,166,255,0.3)'
+                   : 'rgba(88,166,255,0.1)';
+            }),
+            borderRadius: 4,
+            borderSkipped: false,
+          }],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { grid: { display: false }, ticks: { color: '#8b949e', font: { size: 10 }, maxRotation: 0 } },
+            y: { grid: { color: '#30363d' }, ticks: { color: '#8b949e' } },
+          },
+        },
+      });
+      charts.push(chart);
+    }
+
+    function renderDailyChart(canvasId, dailyBd, herName, meName) {
+      if (!chartOk(canvasId)) return;
+      const ctx = document.getElementById(canvasId);
+      if (!ctx) return;
+      const chart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: dailyBd.map(d => d.date.slice(5)), // MM-DD
+          datasets: [
+            {
+              label: herName,
+              data: dailyBd.map(d => d.her),
+              backgroundColor: '#db61a2',
+              borderRadius: 4,
+              borderSkipped: false,
+            },
+            {
+              label: meName,
+              data: dailyBd.map(d => d.me),
+              backgroundColor: '#3fb950',
+              borderRadius: 4,
+              borderSkipped: false,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              labels: { color: '#8b949e', usePointStyle: true, padding: 16 },
+            },
+          },
+          scales: {
+            x: {
+              stacked: true,
+              grid: { display: false },
+              ticks: { color: '#8b949e', font: { size: 11 } },
+            },
+            y: {
+              stacked: true,
+              grid: { color: '#30363d' },
+              ticks: { color: '#8b949e' },
+            },
+          },
+        },
+      });
+      charts.push(chart);
+    }
+
+    function renderMonthlyChart(canvasId, monthly, herName, meName) {
+      if (!chartOk(canvasId)) return;
+      const ctx = document.getElementById(canvasId);
+      if (!ctx) return;
+      const chart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: monthly.map(d => d.month.slice(5)),
+          datasets: [
+            {
+              label: herName,
+              data: monthly.map(d => d.her),
+              borderColor: '#db61a2',
+              backgroundColor: 'rgba(219,97,162,0.1)',
+              fill: true, tension: 0.3, pointRadius: 4,
+            },
+            {
+              label: meName,
+              data: monthly.map(d => d.me),
+              borderColor: '#3fb950',
+              backgroundColor: 'rgba(63,185,80,0.1)',
+              fill: true, tension: 0.3, pointRadius: 4,
+            },
+            {
+              label: '合计',
+              data: monthly.map(d => d.total),
+              borderColor: '#58a6ff',
+              borderDash: [5, 5], borderWidth: 1.5,
+              fill: false, tension: 0.3, pointRadius: 2,
+            },
+          ],
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { labels: { color: '#8b949e', usePointStyle: true, padding: 16 } } },
+          scales: {
+            x: { grid: { display: false }, ticks: { color: '#8b949e' } },
+            y: { grid: { color: '#30363d' }, ticks: { color: '#8b949e' } },
+          },
+        },
+      });
+      charts.push(chart);
+    }
+
+    function renderSignalsChart(canvasId, signalList) {
+      if (!chartOk(canvasId)) return;
+      const ctx = document.getElementById(canvasId);
+      if (!ctx) return;
+      const chart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: signalList.map(s => s.name),
+          datasets: [{
+            label: '密度 (/千条)',
+            data: signalList.map(s => s.density),
+            backgroundColor: signalList.map(s => s.color),
+            borderRadius: 6, borderSkipped: false,
+          }],
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+          },
+          scales: {
+            x: { grid: { display: false }, ticks: { color: '#8b949e', font: { size: 12 } } },
+            y: { grid: { color: '#30363d' }, ticks: { color: '#8b949e' }, title: { display: true, text: '/千条消息', color: '#8b949e' } },
+          },
+        },
+      });
+      charts.push(chart);
+    }
+
+    function renderTopicsRadar(canvasId, topics) {
+      if (!chartOk(canvasId)) return;
+      const ctx = document.getElementById(canvasId);
+      if (!ctx) return;
+      const labels = topics.map(t => `${t.topic}`);
+      const data = topics.map(t => t.total_hits || 0);
+      const maxVal = Math.max(...data, 1);
+      const totalHits = data.reduce((a, b) => a + b, 0);
+      const n = data.length;
+
+      // Balance score: 0 = one topic dominates, 100 = perfectly even
+      const avg = totalHits / n;
+      const variance = data.reduce((s, v) => s + (v - avg) ** 2, 0) / n;
+      const stdDev = Math.sqrt(variance);
+      const cv = avg > 0 ? stdDev / avg : 1;
+      const balanceScore = Math.round(Math.max(0, Math.min(100, 100 * (1 - cv * 0.8))));
+
+      const colors = ['#db61a2', '#58a6ff', '#3fb950', '#d2991d', '#a371f7', '#f85149', '#79c0ff', '#e879f9'];
+
+      // Generate topic suggestions
+      const sorted = topics.map((t, i) => ({ ...t, idx: i, hits: data[i], pct: totalHits > 0 ? Math.round(data[i] / totalHits * 100) : 0 }));
+      sorted.sort((a, b) => b.hits - a.hits);
+      const topTopic = sorted[0];
+      const weakTopics = sorted.filter(t => t.pct < 15 && t !== topTopic).slice(0, 3);
+      const suggestions = [];
+      if (balanceScore < 40) {
+        suggestions.push(`💬 对话高度集中在「${topTopic.topic}」（${topTopic.pct}%），建议适当拓展其他话题维度`);
+      }
+      if (weakTopics.length > 0) {
+        const names = weakTopics.map(t => `「${t.topic}」`).join('、');
+        suggestions.push(`🌱 话题短板：${names}占比较低，可主动引导相关讨论丰富对话层次`);
+      }
+      if (balanceScore >= 70) {
+        suggestions.push('✨ 话题覆盖均衡，继续保持多元化的交流节奏');
+      }
+      if (n >= 5 && sorted[n-1].pct < 5) {
+        suggestions.push(`📉 「${sorted[n-1].topic}」几乎未被提及，如果这是你希望沟通的方向，可以尝试自然带入`);
+      }
+
+      // Render balance bar + suggestions
+      const balanceEl = document.getElementById('topicsBalance');
+      if (balanceEl) {
+        const barColor = balanceScore >= 70 ? 'var(--green)' : balanceScore >= 40 ? 'var(--orange)' : 'var(--red)';
+        balanceEl.innerHTML = `
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+            <span style="font-size:0.78rem;color:var(--text2);font-weight:600">🎯 话题均衡度</span>
+            <span style="font-size:0.9rem;font-weight:800;color:${barColor}">${balanceScore}/100</span>
+          </div>
+          <div style="height:6px;background:var(--bg);border-radius:3px;overflow:hidden">
+            <div style="height:100%;width:${balanceScore}%;background:${barColor};border-radius:3px;transition:width 0.8s ease"></div>
+          </div>
+          <div style="font-size:0.7rem;color:var(--muted);margin-top:4px">
+            ${balanceScore >= 70 ? '话题分布均匀，对话内容丰富多元' : balanceScore >= 40 ? '有一定侧重，部分话题主导对话' : '话题高度集中，对话聚焦单一方向'}
+          </div>
+          ${suggestions.length ? `
+          <div style="margin-top:10px;display:flex;flex-direction:column;gap:5px">
+            ${suggestions.map(s => `<div style="font-size:0.75rem;color:var(--text2);padding:6px 10px;background:var(--bg2);border-radius:6px;line-height:1.5">${s}</div>`).join('')}
+          </div>` : ''}`;
+      }
+
+      const chart = new Chart(ctx, {
+        type: 'radar',
+        data: {
+          labels,
+          datasets: [{
+            label: '命中次数',
+            data,
+            backgroundColor: 'rgba(219,97,162,0.12)',
+            borderColor: '#db61a2',
+            borderWidth: 2.5,
+            pointBackgroundColor: data.map((_, i) => colors[i % colors.length]),
+            pointBorderColor: '#0d1117',
+            pointBorderWidth: 2.5,
+            pointRadius: 6,
+            pointHoverRadius: 8,
+          }],
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              backgroundColor: '#21262d',
+              titleColor: '#e6edf3',
+              bodyColor: '#e6edf3',
+              borderColor: '#30363d',
+              borderWidth: 1,
+              callbacks: {
+                label: ctx => ` ${ctx.raw} 次 · ${totalHits > 0 ? Math.round(ctx.raw / totalHits * 100) : 0}%`,
+              },
+            },
+          },
+          scales: {
+            r: {
+              beginAtZero: true,
+              max: Math.ceil(maxVal * 1.2),
+              grid: { color: '#30363d' },
+              angleLines: { color: '#30363d' },
+              pointLabels: {
+                color: '#e6edf3',
+                font: { size: 11, weight: '600' },
+              },
+              ticks: {
+                display: true,
+                backdropColor: 'transparent',
+                color: '#484f58',
+                font: { size: 9 },
+                stepSize: Math.ceil(maxVal / 4),
+              },
+            },
+          },
+        },
+        plugins: [{
+          id: 'radarLabels',
+          afterDraw(chart) {
+            const { ctx, scales: { r }, data: { labels, datasets } } = chart;
+            const meta = chart.getDatasetMeta(0);
+            const ds = datasets[0].data;
+            ctx.save();
+            ctx.font = 'bold 11px -apple-system, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            meta.data.forEach((pt, i) => {
+              const val = ds[i];
+              if (val === 0) return;
+              const pct = totalHits > 0 ? Math.round(val / totalHits * 100) : 0;
+              // Position label slightly outward from point
+              const cx = pt.x + (pt.x - r.xCenter) * 0.18;
+              const cy = pt.y + (pt.y - r.yCenter) * 0.18;
+              ctx.fillStyle = colors[i % colors.length];
+              ctx.fillText(val, cx, cy - 8);
+              ctx.fillStyle = '#8b949e';
+              ctx.font = '10px -apple-system, sans-serif';
+              ctx.fillText(pct + '%', cx, cy + 6);
+              ctx.font = 'bold 11px -apple-system, sans-serif';
+            });
+            ctx.restore();
+          },
+        }],
+      });
+      charts.push(chart);
+    }
+
+    function renderGroupDailyChart(canvasId, data) {
+      if (!chartOk(canvasId)) return;
+      const ctx = document.getElementById(canvasId);
+      if (!ctx) return;
+      const chart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: data.map(d => d.date.slice(5)),
+          datasets: [{
+            label: '消息数',
+            data: data.map(d => d.count),
+            borderColor: '#58a6ff',
+            backgroundColor: 'rgba(88,166,255,0.1)',
+            fill: true, tension: 0.3, pointRadius: 3,
+          }],
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { grid: { display: false }, ticks: { color: '#8b949e' } },
+            y: { grid: { color: '#30363d' }, ticks: { color: '#8b949e' } },
+          },
+        },
+      });
+      charts.push(chart);
+    }
+
+    function renderTiersPie(canvasId, tiers) {
+      if (!chartOk(canvasId)) return;
+      const ctx = document.getElementById(canvasId);
+      if (!ctx) return;
+      const colors = ['#f59e0b', '#58a6ff', '#3fb950', '#484f58'];
+      const chart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: tiers.map(t => t.tier),
+          datasets: [{
+            data: tiers.map(t => t.msg_pct),
+            backgroundColor: colors.slice(0, tiers.length), borderWidth: 0,
+          }],
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false, cutout: '55%',
+          plugins: {
+            legend: {
+              position: 'bottom',
+              labels: { color: '#8b949e', padding: 16, font: { size: 12 }, usePointStyle: true },
+            },
+          },
+        },
+      });
+      charts.push(chart);
+    }
+
+    function renderWeekdayChart(canvasId, data) {
+      if (!chartOk(canvasId)) return;
+      const ctx = document.getElementById(canvasId);
+      if (!ctx) return;
+      const maxVal = Math.max(...data.map(d => d.avg || d.total), 1);
+      const chart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: data.map(d => d.day),
+          datasets: [{
+            label: '日均消息',
+            data: data.map(d => d.avg || d.total),
+            backgroundColor: data.map(d => {
+              const day = d.day;
+              if (day === '周六' || day === '周日') return 'rgba(219,97,162,0.6)';
+              return 'rgba(88,166,255,0.6)';
+            }),
+            borderRadius: 6, borderSkipped: false,
+          }],
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { grid: { display: false }, ticks: { color: '#8b949e', font: { size: 12 } } },
+            y: { grid: { color: '#30363d' }, ticks: { color: '#8b949e' } },
+          },
+        },
+      });
+      charts.push(chart);
+    }
+
+    // ── Screenshot ──
+    async function captureScreenshot() {
+      const results = document.getElementById("results");
+      if (!results || !results.classList.contains("active")) return;
+
+      const btn = document.querySelector(".quick-nav-btn.screenshot");
+      if (btn) { btn.classList.add("loading"); btn.textContent = "⏳ 生成中..."; }
+
+      try {
+        const settingsModal = document.getElementById("settingsModal");
+        const wasModalOpen = settingsModal && settingsModal.classList.contains("show");
+        if (wasModalOpen) settingsModal.classList.remove("show");
+        const nav = document.getElementById("scrollNav");
+        if (nav) nav.style.display = "none";
+
+        await new Promise(r => setTimeout(r, 200));
+
+        const app = document.querySelector(".app");
+        const fullHeight = app.scrollHeight;
+        const canvas = await html2canvas(app, {
+          backgroundColor: "#0d1117",
+          scale: 2, useCORS: true, logging: false,
+          height: fullHeight, windowHeight: fullHeight, scrollY: 0,
+        });
+
+        if (nav) nav.style.display = "";
+        if (wasModalOpen) settingsModal.classList.add("show");
+
+        const link = document.createElement("a");
+        const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+        link.download = `chat-analysis-${timestamp}.png`;
+        link.href = canvas.toDataURL("image/png");
+        link.click();
+      } catch (err) {
+        console.error("Screenshot failed:", err);
+        alert("截图失败: " + err.message);
+      }
+
+      if (btn) { btn.classList.remove("loading"); btn.textContent = "📸 保存截图"; }
+    }
+
+    // ── Quick Navigation ──
+    function getSectionIcon(title) {
+      const t = title.toLowerCase();
+      if (t.includes('总览')) return '🏠';
+      if (t.includes('趋势') || t.includes('时间') || t.includes('消息')) return '📈';
+      if (t.includes('话题') || t.includes('主题')) return '🏷️';
+      if (t.includes('分析') || t.includes('洞察') || t.includes('总结')) return '💡';
+      if (t.includes('情绪') || t.includes('情感') || t.includes('亲密')) return '💞';
+      if (t.includes('活跃') || t.includes('时段') || t.includes('频率')) return '⏰';
+      if (t.includes('画像')) return '👤';
+      if (t.includes('发送') || t.includes('联系人') || t.includes('成员')) return '👥';
+      if (t.includes('关系') || t.includes('阶段')) return '🔗';
+      if (t.includes('互动') || t.includes('交互')) return '🔄';
+      if (t.includes('关键词')) return '🔑';
+      if (t.includes('健康') || t.includes('诊断')) return '🏥';
+      if (t.includes('建议') || t.includes('推荐')) return '💎';
+      if (t.includes('设置') || t.includes('配置')) return '⚙️';
+      if (t.includes('性能') || t.includes('调用')) return '⚡';
+      return '📌';
+    }
+
+    function buildScrollNav() {
+      const nav = document.getElementById("scrollNav");
+      const list = document.getElementById("scrollNavList");
+      if (!nav || !list) return;
+
+      // Scan results for section titles
+      const sections = document.querySelectorAll("#results .section-title");
+      if (!sections.length) { nav.classList.remove("visible"); return; }
+
+      list.innerHTML = "";
+      sections.forEach((el, i) => {
+        const id = "sec-" + i;
+        el.id = id;
+        const raw = el.textContent.trim().replace(/^[^\s]+\s*/, ""); // strip emoji prefix
+        const icon = getSectionIcon(raw);
+        const li = document.createElement("li");
+        li.innerHTML = `<span class="quick-nav-item-icon">${icon}</span><span class="quick-nav-item-text">${raw}</span>`;
+        li.addEventListener("click", () => {
+          document.getElementById(id).scrollIntoView({ behavior: "smooth", block: "start" });
+        });
+        list.appendChild(li);
+      });
+
+      nav.classList.add("visible");
+      updateActiveNav();
+    }
+
+    function updateActiveNav() {
+      const sections = document.querySelectorAll("#results .section-title");
+      const items = document.querySelectorAll("#scrollNavList li");
+      if (!sections.length) return;
+
+      let activeIdx = -1;
+      sections.forEach((el, i) => {
+        const rect = el.getBoundingClientRect();
+        if (rect.top <= 120) activeIdx = i;
+      });
+      items.forEach((li, i) => li.classList.toggle("active", i === activeIdx));
+    }
+
+    function scrollToTop() {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+
+    // Attach scroll listener
+    let scrollTicking = false;
+    window.addEventListener("scroll", () => {
+      if (!scrollTicking) {
+        requestAnimationFrame(() => { updateActiveNav(); scrollTicking = false; });
+        scrollTicking = true;
+      }
+    }, { passive: true });
+
+    // ── Identity tags (used by analysis results) ──
+
+    function toggleTopics(btn, id) {
+      const hidden = document.getElementById("topic-hidden-" + id);
+      if (!hidden) return;
+      const isOpen = hidden.classList.toggle("open");
+      btn.textContent = isOpen ? "收起 ▴" : "展开全部话题 ▾";
+    }
+
+
+    // ── Identity picker (replaces old editIdentityTag) ──
+    const IDENTITIES_MAP = {
+        lover: { icon: '💕', label: '恋人' },
+        family: { icon: '👨‍👩‍👧', label: '家人' },
+        business: { icon: '💼', label: '合作伙伴' },
+        colleague: { icon: '🏢', label: '同事' },
+        service: { icon: '📞', label: '客服/服务' },
+        friend: { icon: '🤝', label: '朋友' },
+    };
+
+
+    let _pickerContact = '';
+    let _customIdentsCache = null;
+
+    async function showIdentityPicker(contact, currentKey) {
+        _pickerContact = contact;
+        const container = document.getElementById('identityOptions');
+        const customRow = document.getElementById('identityCustomRow');
+        customRow.style.display = 'none';
+        container.innerHTML = 'Loading...';
+
+        // Load custom identities from API (cached for session)
+        if (_customIdentsCache === null) {
+            try {
+                const r = await fetch('/api/custom-identities');
+                const d = await r.json();
+                _customIdentsCache = d.ok ? (d.identities || []) : [];
+            } catch(e) { _customIdentsCache = []; }
+        }
+
+        container.innerHTML = '';
+
+        // Combine built-in + custom identities
+        const allIdents = { ...IDENTITIES_MAP };
+        const builtInKeys = new Set(Object.keys(allIdents));
+        for (const ci of _customIdentsCache) {
+            if (!builtInKeys.has(ci.key)) {
+                allIdents[ci.key] = { icon: ci.icon || '\ud83c\udff7\ufe0f', label: ci.label };
+            }
+        }
+
+        for (const [key, info] of Object.entries(allIdents)) {
+            const isBuiltIn = builtInKeys.has(key);
+            const isActive = key === currentKey;
+            const div = document.createElement('div');
+            div.style.cssText = 'display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:10px;cursor:pointer;transition:all 0.2s;' +
+                (isActive ? 'background:rgba(88,166,255,0.15);border:1px solid rgba(88,166,255,0.3)' : 'background:rgba(255,255,255,0.03);border:1px solid transparent');
+            div.onmouseover = () => { if (!isActive) div.style.background = 'rgba(255,255,255,0.07)'; };
+            div.onmouseout = () => { if (!isActive) div.style.background = 'rgba(255,255,255,0.03)'; };
+            div.onclick = () => selectIdentity(contact, key, info.label);
+
+            div.innerHTML = '<span style="font-size:1.4rem">' + info.icon + '</span>' +
+                '<span style="flex:1;font-weight:' + (isActive ? '700' : '400') + '">' + info.label + '</span>' +
+                (!isBuiltIn ? '<span style="font-size:0.65rem;color:var(--text2);background:rgba(255,255,255,0.05);padding:1px 6px;border-radius:4px;margin-right:4px">自定</span>' : '') +
+                (isActive ? '<span style="font-size:0.7rem;color:var(--accent);font-weight:600">\u2713 当前</span>' :
+                    '<span style="font-size:0.7rem;color:var(--text2)">选择</span>');
+            container.appendChild(div);
+        }
+
+        // "\u65b0\u5efa\u8eab\u4efd" button
+        const newDiv = document.createElement('div');
+        newDiv.style.cssText = 'display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:10px;cursor:pointer;background:rgba(255,255,255,0.03);border:1px dashed rgba(255,255,255,0.15);margin-top:4px;transition:all 0.2s';
+        newDiv.onmouseover = () => { newDiv.style.background = 'rgba(255,255,255,0.07)'; };
+        newDiv.onmouseout = () => { newDiv.style.background = 'rgba(255,255,255,0.03)'; };
+        newDiv.onclick = () => {
+            container.querySelectorAll('div').forEach(d => d.style.display = 'none');
+            customRow.style.display = 'block';
+            document.getElementById('identityCustomInput').value = '';
+            document.getElementById('identityCustomInput').focus();
+        };
+        newDiv.innerHTML = '<span style="font-size:1.2rem;opacity:0.5">\u2795</span><span style="color:var(--text2)">新建身份...</span>';
+        container.appendChild(newDiv);
+
+        document.getElementById('identityPicker').classList.add('show');
+    }
+
+    function closeIdentityPicker() {
+        document.getElementById('identityPicker').classList.remove('show');
+        document.getElementById('identityCustomRow').style.display = 'none';
+        document.getElementById('identityOptions').querySelectorAll('div').forEach(d => d.style.display = '');
+    }
+
+    async function selectIdentity(contact, identityKey, label) {
+        try {
+            const res = await fetch("/api/tags", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ contact, tag: label, identity_key: identityKey }),
+            });
+            const data = await res.json();
+            if (data.ok) {
+                closeIdentityPicker();
+                if (selectedContact && selectedContact.name === contact) {
+                    runAnalysis();
+                }
+            }
+        } catch (err) {
+            console.error("Tag error:", err);
+        }
+    }
+
+    async function confirmCustomIdentity() {
+        const input = document.getElementById('identityCustomInput');
+        const label = input.value.trim();
+        if (!label) { input.focus(); return; }
+
+        // Generate unique key
+        const key = 'custom_' + Date.now().toString(36);
+
+        // Save to custom identities library
+        try {
+            await fetch("/api/custom-identities", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ key, label, icon: "\ud83c\udff7\ufe0f", base: "friend" }),
+            });
+        } catch(e) { /* non-critical */ }
+
+        _customIdentsCache = null; // force reload next time
+
+        // Now set this identity for the current contact
+        await selectIdentity(_pickerContact, key, label);
+    }
+
+
+    async function editIdentityTag(contact, currentLabel) {
+        // Legacy fallback — replaced by showIdentityPicker
+        showIdentityPicker(contact, '');
+    }
+
+
+    async function deleteIdentityTag(contact) {
+      if (!confirm("恢复自动识别标签？")) return;
+      try {
+        const res = await fetch("/api/tags", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ contact }),
+        });
+        const data = await res.json();
+        if (data.ok && selectedContact && selectedContact.name === contact) {
+          runAnalysis();
+        }
+      } catch (err) {
+        console.error("Delete tag error:", err);
+      }
+    }
+
+    // ── LLM Settings ──
+
+    let llmConfig = { enabled: false, provider: "deepseek", model: "deepseek-chat", api_key: "", base_url: "https://api.deepseek.com/v1" };
+
+    async function loadConfig() {
+      try {
+        const r = await fetch("/api/config");
+        const d = await r.json();
+        if (d.ok) {
+          llmConfig = d.config;
+          // If config has API key, assume it was previously tested and working
+          _llmTestedOk = !!(llmConfig.api_key && llmConfig.api_key.trim());
+          renderConfig();
+        }
+      } catch (e) { console.error("load config:", e); }
+    }
+
+    function renderConfig() {
+      document.getElementById("cfgProvider").value = llmConfig.provider || "deepseek";
+      document.getElementById("cfgBaseUrl").value = llmConfig.base_url || "";
+      document.getElementById("cfgModel").value = llmConfig.model || "";
+      document.getElementById("cfgApiKey").value = llmConfig.api_key || "";
+      const sw = document.getElementById("cfgEnabled");
+      if (llmConfig.enabled) sw.classList.add("on"); else sw.classList.remove("on");
+      // Disable toggle until configured AND tested
+      if (!isLLMConfigured() || !_llmTestedOk) sw.classList.add("disabled");
+      else sw.classList.remove("disabled");
+    }
+
+    function toggleSettings() {
+      document.getElementById("settingsModal").classList.toggle("show");
+      document.getElementById("cfgStatus").textContent = "";
+      document.getElementById("pwStatus").textContent = "";
+      document.getElementById("profileStatus").textContent = "";
+      loadConfig();
+      loadSettings();
+      switchSettingsTab("profile");
+    }
+
+    function switchSettingsTab(tab) {
+      document.querySelectorAll(".settings-tab").forEach(b => {
+        const t = b.textContent.includes("个人") ? "profile" : b.textContent.includes("大模型") ? "llm" : b.textContent.includes("安全") ? "security" : b.textContent.includes("用量") ? "usage" : "network";
+        b.classList.toggle("active", t === tab);
+      });
+      document.getElementById("panelProfile").classList.toggle("active", tab === "profile");
+      document.getElementById("panelLlm").classList.toggle("active", tab === "llm");
+      document.getElementById("panelSecurity").classList.toggle("active", tab === "security");
+      document.getElementById("panelUsage").classList.toggle("active", tab === "usage");
+      document.getElementById("panelNetwork").classList.toggle("active", tab === "network");
+      if (tab === "usage") loadUsageStats();
+      if (tab === "network") loadLANConfig();
+    }
+
+    function formatNum(n) { return n >= 1000 ? Math.round(n/1000) + 'K' : n; }
+    function formatCost(c) { return c < 0.01 ? '< ¥0.01' : '¥' + c.toFixed(2); }
+
+    async function loadUsageStats() {
+      try {
+        const r = await fetch("/api/usage");
+        const d = await r.json();
+        if (!d.ok) { document.getElementById("uStatus").textContent = '加载失败'; return; }
+        const s = d.data;
+        document.getElementById("uTotalCalls").textContent = s.total_calls;
+        document.getElementById("uTotalTokens").textContent = formatNum(s.total_input_tokens + s.total_output_tokens);
+        document.getElementById("uInputTokens").textContent = formatNum(s.total_input_tokens);
+        document.getElementById("uCost").textContent = formatCost(s.total_cost_est || 0);
+        // Function table
+        const byFn = s.by_function || {};
+        const totalCalls = Math.max(1, Object.values(byFn).reduce((a,b) => a + (b.calls||0), 0));
+        let rows = Object.entries(byFn)
+          .sort((a,b) => (b[1].calls||0) - (a[1].calls||0))
+          .map(([name, fn]) => {
+            const pct = Math.round((fn.calls||0) / totalCalls * 100);
+            return `<tr style="border-bottom:1px solid var(--border)">
+              <td style="padding:6px 8px">${escapeHtml(name)}</td>
+              <td style="text-align:right;padding:6px 8px;color:var(--accent)">${fn.calls||0}</td>
+              <td style="text-align:right;padding:6px 8px">${formatNum(fn.input_tokens||0)}</td>
+              <td style="text-align:right;padding:6px 8px">${formatNum(fn.output_tokens||0)}</td>
+              <td style="text-align:right;padding:6px 8px;color:var(--text2)">${pct}%</td>
+            </tr>`;
+          }).join('');
+        document.getElementById("uFnTable").innerHTML = rows || '<tr><td colspan="5" style="color:var(--muted);padding:12px;text-align:center">暂无数据</td></tr>';
+        document.getElementById("uStatus").textContent = '';
+      } catch(e) {
+        document.getElementById("uStatus").textContent = '加载失败';
+      }
+    }
+
+    async function resetUsage() {
+      if (!confirm('确定要清空所有用量统计吗？')) return;
+      const status = document.getElementById("uStatus");
+      status.textContent = '⏳ 清零中...';
+      try {
+        await fetch("/api/usage", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({action:"reset"}) });
+        loadUsageStats();
+        status.textContent = '✅ 已清零';
+        status.style.color = 'var(--green)';
+      } catch(e) { status.textContent = '清零失败'; }
+    }
+
+    async function loadLANConfig() {
+      try {
+        const r = await fetch("/api/settings");
+        const d = await r.json();
+        if (d.ok) {
+          const el = document.getElementById("lanEnabled");
+          if (d.lan_enabled) el.classList.add("on"); else el.classList.remove("on");
+          // Show actual LAN IP and update link
+          const ipEl = document.getElementById("lanIpDisplay");
+          const linkEl = document.getElementById("lanIpLink");
+          const codeEl = document.getElementById("lanIpCode");
+          if (ipEl && d.lan_ip && d.lan_ip !== "未知") {
+            ipEl.textContent = d.lan_ip;
+            if (linkEl) linkEl.href = "http://" + d.lan_ip + ":8899";
+            if (codeEl) {
+              const fullUrl = "http://" + d.lan_ip + ":8899";
+              codeEl.onclick = () => {
+                navigator.clipboard.writeText(fullUrl).then(() => {
+                  const hint = document.getElementById("lanCopyHint");
+                  if (hint) { hint.style.display = "inline"; setTimeout(() => { hint.style.display = "none"; }, 2000); }
+                }).catch(() => {});
+              };
+            }
+          }
+        }
+      } catch(e) {}
+    }
+
+    async function toggleLAN() {
+      const el = document.getElementById("lanEnabled");
+      const status = document.getElementById("lanStatus");
+      const enable = !el.classList.contains("on");
+      status.textContent = '⏳ 保存中...';
+      status.style.color = 'var(--text2)';
+      try {
+        const r = await fetch("/api/settings", {
+          method: "POST",
+          headers: {"Content-Type":"application/json"},
+          body: JSON.stringify({ lan_enabled: enable })
+        });
+        const d = await r.json();
+        if (d.ok) {
+          el.classList.toggle("on", enable);
+          status.textContent = enable ? '✅ 已开启 — 需重启服务生效' : '✅ 已关闭 — 仅限本地访问';
+          status.style.color = 'var(--green)';
+        } else {
+          status.textContent = '保存失败';
+          status.style.color = 'var(--red)';
+        }
+      } catch(e) { status.textContent = '网络错误'; status.style.color = 'var(--red)'; }
+    }
+
+    let _llmTestedOk = false; // true after a successful connection test
+
+    function isLLMConfigured() {
+      return llmConfig.api_key && llmConfig.api_key.trim().length > 0
+          && llmConfig.base_url && llmConfig.base_url.trim().length > 0
+          && llmConfig.model && llmConfig.model.trim().length > 0;
+    }
+
+    function toggleEnable() {
+      if (!isLLMConfigured() || !_llmTestedOk) {
+        status("⚠️ 请先配置并测试大模型连接", false);
+        return;
+      }
+      llmConfig.enabled = !llmConfig.enabled;
+      renderConfig();
+    }
+
+    async function saveProfile() {
+      const status = document.getElementById("profileStatus");
+      const nickname = document.getElementById("cfgNickname").value.trim();
+      status.textContent = "⏳ 保存中...";
+      status.style.color = "var(--text2)";
+      try {
+        const r = await fetch("/api/settings", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ user_nickname: nickname }),
+        });
+        const d = await r.json();
+        if (d.ok) {
+          window._configuredNickname = nickname;
+          status.textContent = "✅ 已保存" + (nickname ? " — AI 将以「" + nickname + "」识别你的身份" : "");
+          status.style.color = "var(--green)";
+        } else {
+          status.textContent = "❌ " + (d.error || "保存失败");
+          status.style.color = "var(--red)";
+        }
+      } catch (e) {
+        status.textContent = "❌ 网络错误";
+        status.style.color = "var(--red)";
+      }
+    }
+
+    // ── Security Settings ──
+
+    let pwConfig = { password_enabled: true };
+
+    async function loadSettings() {
+      try {
+        const r = await fetch("/api/settings");
+        const d = await r.json();
+        if (d.ok) {
+          pwConfig = d;
+          renderPasswordUI();
+          document.getElementById("cfgNickname").value = d.user_nickname || "";
+        }
+      } catch (e) { /* ignore */ }
+    }
+
+    function renderPasswordUI() {
+      const sw = document.getElementById("pwEnabled");
+      if (pwConfig.password_enabled) sw.classList.add("on");
+      else sw.classList.remove("on");
+      document.getElementById("pwRow").style.opacity = pwConfig.password_enabled ? "1" : "0.4";
+      document.getElementById("pwConfirmRow").style.opacity = pwConfig.password_enabled ? "1" : "0.4";
+      document.getElementById("pwNew").disabled = !pwConfig.password_enabled;
+      document.getElementById("pwConfirm").disabled = !pwConfig.password_enabled;
+    }
+
+    function togglePassword() {
+      pwConfig.password_enabled = !pwConfig.password_enabled;
+      renderPasswordUI();
+    }
+
+    async function savePassword() {
+      const pwStatus = document.getElementById("pwStatus");
+      const newPw = document.getElementById("pwNew").value.trim();
+      const confirmPw = document.getElementById("pwConfirm").value.trim();
+
+      if (pwConfig.password_enabled) {
+        if (newPw && newPw !== confirmPw) {
+          pwStatus.textContent = "❌ 两次密码不一致";
+          pwStatus.style.color = "var(--red)";
+          return;
+        }
+        if (newPw && newPw.length < 3) {
+          pwStatus.textContent = "❌ 密码至少3位";
+          pwStatus.style.color = "var(--red)";
+          return;
+        }
+      }
+
+      pwStatus.textContent = "⏳ 保存中...";
+      pwStatus.style.color = "var(--text2)";
+      try {
+        const body = { password_enabled: pwConfig.password_enabled };
+        if (newPw) body.password = newPw;
+        const r = await fetch("/api/settings", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        const d = await r.json();
+        if (d.ok) {
+          pwConfig = d;
+          renderPasswordUI();
+          document.getElementById("pwNew").value = "";
+          document.getElementById("pwConfirm").value = "";
+          pwStatus.textContent = "✅ 安全设置已保存" + (pwConfig.password_enabled ? "" : " — 密码保护已关闭，可直接访问");
+          pwStatus.style.color = "var(--green)";
+        } else {
+          pwStatus.textContent = "❌ " + (d.error || "保存失败");
+          pwStatus.style.color = "var(--red)";
+        }
+      } catch (e) {
+        pwStatus.textContent = "❌ 网络错误";
+        pwStatus.style.color = "var(--red)";
+      }
+    }
+
+    function onProviderChange() {
+      const p = document.getElementById("cfgProvider").value;
+      const presets = {
+        deepseek: { base_url: "https://api.deepseek.com/v1", model: "deepseek-chat" },
+        openai: { base_url: "https://api.openai.com/v1", model: "gpt-4o" },
+        openrouter: { base_url: "https://openrouter.ai/api/v1", model: "openai/gpt-4o" },
+      };
+      if (presets[p]) {
+        document.getElementById("cfgBaseUrl").value = presets[p].base_url;
+        document.getElementById("cfgModel").value = presets[p].model;
+      }
+    }
+
+    function status(msg, ok) {
+      const el = document.getElementById("cfgStatus");
+      el.textContent = msg;
+      el.style.color = ok ? "var(--green)" : "var(--red)";
+    }
+
+    async function saveConfig() {
+      llmConfig.provider = document.getElementById("cfgProvider").value;
+      llmConfig.base_url = document.getElementById("cfgBaseUrl").value;
+      llmConfig.model = document.getElementById("cfgModel").value;
+      llmConfig.api_key = document.getElementById("cfgApiKey").value;
+      // Reset tested flag when config changes — user must re-test
+      _llmTestedOk = false;
+      try {
+        const r = await fetch("/api/config", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            provider: llmConfig.provider,
+            base_url: llmConfig.base_url,
+            model: llmConfig.model,
+            api_key: llmConfig.api_key,
+            enabled: llmConfig.enabled,
+            max_tokens: llmConfig.max_tokens,
+            temperature: llmConfig.temperature,
+          }),
+        });
+        const d = await r.json();
+        if (d.ok) {
+          // Don't overwrite llmConfig from response — response may have masked api_key
+          // Preserve the key the user just entered
+          const newKey = llmConfig.api_key;
+          llmConfig = d.config;
+          llmConfig.api_key = newKey || d.config.api_key;
+          status("✅ 设置已保存，请测试连接", true);
+          renderConfig();
+        }
+        else { status("❌ 保存失败: " + d.error, false); }
+      } catch (e) { status("❌ 网络错误", false); }
+    }
+
+    async function testLLM() {
+      status("⏳ 测试中...", true);
+      try {
+        // Save first
+        llmConfig.provider = document.getElementById("cfgProvider").value;
+        llmConfig.base_url = document.getElementById("cfgBaseUrl").value;
+        llmConfig.model = document.getElementById("cfgModel").value;
+        llmConfig.api_key = document.getElementById("cfgApiKey").value;
+        llmConfig.enabled = true;
+        await fetch("/api/config", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(llmConfig),
+        });
+
+        const r = await fetch("/api/llm/signal", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ messages: [{ sender: "测试", content: "你好", time: "2026-01-01 12:00" }] }),
+        });
+        const d = await r.json();
+        if (d.ok) {
+          _llmTestedOk = true;
+          llmConfig.enabled = true;
+          status("✅ 连接成功！AI 分析已就绪", true);
+          document.getElementById("cfgEnabled").classList.add("on");
+          document.getElementById("cfgEnabled").classList.remove("disabled");
+        } else {
+          _llmTestedOk = false;
+          llmConfig.enabled = false;
+          status("❌ " + (d.error || "连接失败"), false);
+        }
+      } catch (e) { _llmTestedOk = false; llmConfig.enabled = false; status("❌ 网络错误: " + e.message, false); }
+    }
+
+    // ── LLM Analysis in Detail ──
+
+    function renderLLMPanel(chatName, messages, identity, chatType) {
+      const results = document.getElementById("results");
+      let panel = document.getElementById("llmPanel");
+      const isGroup = chatType === "group";
+      if (!panel) {
+        panel = document.createElement("div");
+        panel.id = "llmPanel";
+        panel.className = "llm-panel";
+        if (isGroup) {
+          panel.innerHTML = `<h3>🤖 AI 深度分析 <span class="llm-badge">LLM</span></h3><div class="llm-result" id="llmResult"></div>`;
+        } else {
+          panel.innerHTML = `
+            <h3>🤖 AI 深度分析 <span class="llm-badge">LLM</span></h3>
+            <div class="llm-result" id="llmResult"></div>`;
+        }
+        results.appendChild(panel);
+      }
+      panel._messages = messages;
+      panel._chatName = chatName;
+      panel._identity = identity || "lover";
+      panel._chatType = chatType || "private";
+      panel._userName = window._lastUserName || "";
+      panel._autoRan = false;
+      panel._fullResult = null;
+    }
+
+    async function runLLMSignal(chatName) {
+      const panel = document.getElementById("llmPanel");
+      const result = document.getElementById("llmResult");
+      result.className = "llm-result show";
+      result.textContent = "⏳ AI 分析中...";
+      try {
+        const r = await fetch("/api/llm/signal", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ messages: panel._messages || [], chat_name: panel._chatName || "", user_name: panel._userName || "" }),
+        });
+        const d = await r.json();
+        if (d.ok && d.data) {
+          const s = d.data;
+          result.innerHTML = [
+            s.emotion ? `<strong>😶 情绪：</strong>${s.emotion}` : "",
+            s.needs ? `<strong>🎯 需求：</strong>${s.needs}` : "",
+            s.risk ? `<strong>⚠️ 风险：</strong>${s.risk}` : "",
+            s.suggestions ? `<strong>💡 建议：</strong><br>` + s.suggestions.map(x => `  • ${x}`).join("<br>") : "",
+            s.should_reply !== undefined ? `<strong>📨 应回复：</strong>${s.should_reply ? "是" : "否"}` : "",
+            s.reply_tone ? `<strong>🗣 语气：</strong>${s.reply_tone}` : "",
+            s.raw ? s.raw : "",
+          ].filter(Boolean).join("<br><br>");
+        } else {
+          result.textContent = "❌ " + (d.error || "分析失败");
+        }
+      } catch (e) { result.textContent = "❌ 网络错误: " + e.message; }
+    }
+
+    async function runLLMReply(chatName) {
+      const panel = document.getElementById("llmPanel");
+      const result = document.getElementById("llmResult");
+      result.className = "llm-result show";
+      result.textContent = "⏳ 生成回复建议中...";
+      try {
+        const r = await fetch("/api/llm/reply", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ messages: panel._messages || [], style: "自然", identity: panel._identity || "lover", chat_name: panel._chatName || "", user_name: panel._userName || "" }),
+        });
+        const d = await r.json();
+        if (d.ok && d.data) {
+          const rep = d.data;
+          let html = rep.context_note ? `<strong>📌 ${rep.context_note}</strong><br><br>` : "";
+          if (rep.replies) {
+            rep.replies.forEach((r, i) => {
+              html += `<div style="margin-bottom:12px;padding:10px;background:var(--bg);border-radius:8px">`;
+              html += `<strong>${i+1}.</strong> <span style="color:var(--accent)">[${r.style||'回复'}]</span> ${r.text||''}`;
+              html += r.reason ? `<br><span style="color:var(--text2);font-size:0.8rem">💭 ${r.reason}</span>` : "";
+              html += `</div>`;
+            });
+          }
+          if (rep.raw) html += rep.raw;
+          result.innerHTML = html || "无回复建议";
+        } else {
+          result.textContent = "❌ " + (d.error || "生成失败");
+        }
+      } catch (e) { result.textContent = "❌ 网络错误: " + e.message; }
+    }
+
+    async function runLLMInsight(chatName) {
+      const panel = document.getElementById("llmPanel");
+      const result = document.getElementById("llmResult");
+      result.className = "llm-result show";
+      result.textContent = "⏳ 生成关系洞察中...";
+      try {
+        const r = await fetch("/api/llm/insight", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ messages: panel._messages || [], chat_name: chatName, identity: panel._identity || "lover", user_name: panel._userName || "" }),
+        });
+        const d = await r.json();
+        if (d.ok && d.data) {
+          result.textContent = d.data.insight || d.data.raw || "无洞察";
+        } else {
+          result.textContent = "❌ " + (d.error || "分析失败");
+        }
+      } catch (e) { result.textContent = "❌ 网络错误: " + e.message; }
+    }
+
+    function renderDimSlot(dim, data, slot) {
+      // Shared rendering for all dimension types
+      if (dim === "group-topics") {
+        const topics = data.topic_leaderboard || [];
+        if (Array.isArray(topics) && topics.length) {
+          const maxPct = Math.max(...topics.map(t => t.pct || 0), 1);
+          slot.innerHTML = topics.map(t => `
+            <div class="gv-topic-row">
+              <span class="gv-topic-rank" style="color:${t.color||'var(--accent)'}">#${t.rank||'?'}</span>
+              <div class="gv-topic-bar-wrap"><div class="gv-topic-bar" style="width:${Math.max(5, (t.pct||0)/maxPct*100)}%;background:${t.color||'var(--accent)'}"></div></div>
+              <span style="font-size:0.8rem;color:${t.trend==='↑'?'var(--green)':t.trend==='↓'?'var(--red)':'var(--text2)'};min-width:24px">${t.trend||'→'} ${t.pct||0}%</span>
+              <div class="gv-topic-info">
+                <div class="gv-topic-name">${t.topic||''}</div>
+                <div class="gv-topic-kw">${(t.keywords||[]).join(' · ')}</div>
+                ${t.sample?`<div class="gv-topic-sample">"${t.sample}"</div>`:''}
+              </div>
+            </div>`).join('');
+        } else { slot.innerHTML = (data.topic_leaderboard||'').replace(/\n/g,"<br>") || "无数据"; }
+      } else if (dim === "group-members") {
+        const members = data.member_profile || [];
+        if (Array.isArray(members) && members.length) {
+          slot.innerHTML = members.map(m => `
+            <div class="gv-member-card">
+              <div class="gv-member-avatar" style="background:${(m.color||'#58a6ff')}22;color:${m.color||'var(--accent)'}">${m.icon||'👤'}</div>
+              <div class="gv-member-info">
+                <div class="gv-member-name">${m.name||''} <span style="font-size:0.65rem;padding:1px 6px;border-radius:6px;background:${(m.color||'#58a6ff')}22;color:${m.color||'var(--accent)'};margin-left:4px">${m.tier||''}</span></div>
+                <div class="gv-member-style">${m.desc||''}</div>
+                <div class="gv-member-bar-wrap"><div class="gv-member-bar" style="width:${m.msg_share||0}%;background:${m.color||'var(--accent)'}"></div></div>
+              </div>
+              <span style="font-size:0.85rem;font-weight:700;color:${m.color||'var(--accent)'}">${m.msg_share||0}%</span>
+            </div>`).join('');
+        } else { slot.innerHTML = (data.member_profile||'').replace(/\n/g,"<br>") || "无数据"; }
+      } else if (dim === "group-vibe") {
+        const v = data.vibe_check || {};
+        if (v.mood) {
+          slot.innerHTML = `
+            <div class="gv-vibe-card" style="background:${(v.color||'#3fb950')}15;border:1px solid ${v.color||'#3fb950'}33">
+              <span class="gv-vibe-emoji">${v.mood_emoji||'😐'}</span>
+              <div style="flex:1"><div style="font-weight:600;font-size:0.9rem;color:${v.color||'var(--green)'}">${v.mood||''} · ${v.score||'?'}/10</div>
+              <div class="gv-vibe-desc">${v.description||''}</div>
+              ${v.conflict?`<div style="font-size:0.7rem;color:var(--red);margin-top:4px">⚠️ ${v.conflict_detail||''}</div>`:''}</div>
+              <span class="gv-vibe-score" style="color:${v.color||'var(--green)'}">${v.score||'?'}</span>
+            </div>`;
+        } else { slot.innerHTML = (data.vibe_check||'').replace(/\n/g,"<br>") || "无数据"; }
+      } else if (dim === "group-signals") {
+        const signals = data.signal_radar || [];
+        if (Array.isArray(signals) && signals.length) {
+          slot.innerHTML = signals.map(s => `
+            <div class="gv-signal-item">
+              <span class="gv-signal-icon">${s.icon||'📌'}</span>
+              <span class="gv-signal-badge" style="background:${(s.color||'#58a6ff')}22;color:${s.color||'var(--accent)'}">${s.priority||'中'}</span>
+              <span class="gv-signal-content">${s.content||''}</span>
+            </div>`).join('');
+        } else { slot.innerHTML = '<span style="color:var(--muted)">未发现重要信息</span>'; }
+      } else if (dim === "group-trace") {
+        const traces = data.my_trace || [];
+        if (Array.isArray(traces) && traces.length) {
+          slot.innerHTML = traces.map(t => `
+            <div class="gv-trace-item">
+              <div class="gv-trace-icon" style="background:${(t.color||'#58a6ff')}22;color:${t.color||'var(--accent)'}">${t.icon||'📍'}</div>
+              <span class="gv-trace-time">${t.time||''}</span>
+              <span class="gv-trace-content">${t.content||''}</span>
+            </div>`).join('');
+        } else { slot.innerHTML = '<span style="color:var(--muted)">暂无足迹</span>'; }
+      } else if (dim === "group-roles") {
+        const roles = data.role_map || [];
+        if (Array.isArray(roles) && roles.length) {
+          slot.innerHTML = roles.map(r => `
+            <div class="gv-role-card" style="background:${(r.color||'#58a6ff')}12;border:1px solid ${(r.color||'#58a6ff')}22">
+              <span class="gv-role-icon">${r.icon||'👤'}</span>
+              <div class="gv-role-info">
+                <div class="gv-role-name" style="color:${r.color||'var(--accent)'}">${r.role||''}</div>
+                <div class="gv-role-members">${(r.members||[]).map(n => `<span style="color:var(--text);font-weight:500">${n}</span>`).join(' · ')}</div>
+                <div class="gv-role-desc">${r.desc||''}</div>
+              </div>
+            </div>`).join('');
+        } else { slot.innerHTML = (data.role_map||'').replace(/\n/g,"<br>") || "无数据"; }
+      } else {
+        // Generic fallback
+        const key = Object.keys(data)[0];
+        if (key && Array.isArray(data[key])) {
+          slot.innerHTML = data[key].map(t => {
+            if (t.priority) return `<div style="padding:4px 0;border-bottom:1px solid var(--border);font-size:0.85rem"><span style="color:${t.priority==='高'?'var(--red)':t.priority==='中'?'var(--orange)':'var(--text2)'}">[${t.priority}]</span> <strong>${t.who||''}:</strong> ${t.item||''}${t.context?`<br><span style="color:var(--muted);font-size:0.7rem">↳ ${t.context}</span>`:''}</div>`;
+            return `<div style="padding:4px 0;font-size:0.85rem">${JSON.stringify(t).slice(0,200)}</div>`;
+          }).join('');
+        } else {
+          slot.innerHTML = (data[key] || data.insight || data.raw || '').replace(/\n/g,"<br>") || "无数据";
+        }
+      }
+    }
+
+    async function runLLMDim(dim, chatName) {
+      const panel = document.getElementById("llmPanel");
+      const result = document.getElementById("llmResult");
+      panel._activeDim = dim;
+      result.className = "llm-result show";
+      result.innerHTML = '<div style="color:var(--text2)">⏳ 分析中... <button class="filter-reset" onclick="restoreFullResult()">← 显示全部</button></div>';
+      try {
+        const r = await fetch("/api/llm/" + dim, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ messages: panel._messages || [], chat_name: chatName || panel._chatName, identity: panel._identity || "lover", user_name: panel._userName || "" }),
+        });
+        const d = await r.json();
+        if (d.ok && d.data) {
+          renderDimSlot(dim, d.data, result);
+          result.innerHTML = '<button class="filter-reset" onclick="restoreFullResult()" style="margin-bottom:10px">← 显示全部</button>' + result.innerHTML;
+        } else { result.innerHTML = '<button class="filter-reset" onclick="restoreFullResult()" style="margin-bottom:10px">← 显示全部</button><br>❌ ' + (d.error || "失败"); }
+      } catch (e) { result.innerHTML = '<button class="filter-reset" onclick="restoreFullResult()" style="margin-bottom:10px">← 显示全部</button><br>❌ 网络错误'; }
+    }
+
+    function restoreFullResult() {
+      const panel = document.getElementById("llmPanel");
+      panel._activeDim = null;
+      if (panel._fullResult) {
+        document.getElementById("llmResult").innerHTML = panel._fullResult;
+      }
+    }
+
+    async function autoRunLLM() {
+      const panel = document.getElementById("llmPanel");
+      const result = document.getElementById("llmResult");
+      if (!panel || !result || panel._autoRan) return;
+      panel._autoRan = true;
+
+      const msgs = panel._messages || [];
+      const name = panel._chatName || "";
+      const id = panel._identity || "lover";
+      const uname = panel._userName || "";
+      const isGroup = panel._chatType === "group";
+
+      result.className = "llm-result show";
+      result.innerHTML = '<div class="ai-loading-header"><div class="ai-loading-pulse"></div> AI 深度分析中<span class="ai-loading-dots"></span></div>';
+
+      const DIMS = isGroup ? [
+        ["group-topics", "🔥 话题热榜"],
+        ["group-members", "👥 活跃画像"],
+        ["group-vibe", "🎭 氛围评估"],
+        ["group-signals", "📡 信息雷达"],
+        ["group-trace", "👤 我的足迹"],
+        ["group-roles", "🧩 角色图谱"],
+      ] : [
+        ["signal", "🔍 信号解读"],
+        ["reply", "💬 回复建议"],
+        ["insight", "📊 关系洞察"],
+        ["topics", "🗣️ 话题挖掘"],
+        ["todos", "📌 待办提取"],
+        ["emotion-track", "📈 情绪追踪"],
+      ];
+
+      // Build all cards first, then populate asynchronously
+      let cardsHtml = '';
+      for (const [dim, title] of DIMS) {
+        cardsHtml += `<div class="ai-card ${dim.replace('emotion-track','emotion').replace('group-','group')}">
+          <div class="ai-card-title">${title}</div>
+          <div id="dim-${dim}" class="ai-card-body">⏳</div>
+        </div>`;
+      }
+      result.innerHTML += cardsHtml;
+
+      if (isGroup) {
+        // ── Batch mode: single LLM call for all 6 group dimensions ──
+        try {
+          const r = await fetch("/api/llm/group-all", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ messages: msgs, chat_name: name }),
+          });
+          const d = await r.json();
+          if (d.ok && d.data) {
+            const data = d.data;
+            const populate = (dim, key) => {
+              const slot = document.getElementById("dim-group-" + dim);
+              if (slot && data[key] !== undefined) renderDimSlot("group-" + dim, {[key]: data[key]}, slot);
+            };
+            populate("topics", "topic_leaderboard");
+            populate("members", "member_profile");
+            populate("vibe", "vibe_check");
+            populate("signals", "signal_radar");
+            populate("trace", "my_trace");
+            populate("roles", "role_map");
+          }
+        } catch(e) { /* cards stay ⏳ */ }
+      } else {
+        // ── Individual mode for private chat (6 separate API calls) ──
+        const promises = DIMS.map(async ([dim, title]) => {
+        const slot = document.getElementById("dim-" + dim);
+        if (!slot) return;
+        try {
+          let url, body;
+          if (dim === "signal") {
+            url = "/api/llm/signal"; body = JSON.stringify({ messages: msgs, chat_name: name, user_name: uname });
+          } else if (dim === "reply") {
+            url = "/api/llm/reply"; body = JSON.stringify({ messages: msgs, style: "自然", identity: id, chat_name: name, user_name: uname });
+          } else if (dim === "insight") {
+            url = "/api/llm/insight"; body = JSON.stringify({ messages: msgs, chat_name: name, identity: id, user_name: uname });
+          } else {
+            url = "/api/llm/" + dim; body = JSON.stringify({ messages: msgs, chat_name: name, identity: id, user_name: uname });
+          }
+
+          const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body });
+          const d = await r.json();
+
+          if (d.ok && d.data) {
+            if (dim === "signal") { slot.innerHTML = renderSignalCard(d.data); }
+            else if (dim === "reply") { slot.innerHTML = renderReplyCard(d.data); }
+            else if (dim === "insight") { slot.innerHTML = renderInsightCard(d.data); }
+            else if (dim === "topics") { slot.innerHTML = renderTopicsCard(d.data); }
+            else if (dim === "todos") { slot.innerHTML = renderTodosCard(d.data); }
+            else if (dim === "emotion-track") { slot.innerHTML = renderEmotionCard(d.data); }
+            else if (dim.startsWith("group-")) { renderDimSlot(dim, d.data, slot); }
+            else { slot.innerHTML = escapeHtml((d.data[Object.keys(d.data)[0]] || "").replace(/\n/g, "<br>") || "无数据"); }
+          } else {
+            slot.innerHTML = '<div class="ai-empty">🤖 LLM 未配置或调用失败</div>';
+          }
+        } catch (e) {
+          slot.innerHTML = '<div class="ai-empty">⚠️ 网络错误</div>';
+        }
+      });
+
+      await Promise.all(promises);
+      }
+      // Remove loading header, save full result for restore
+      const header = result.querySelector('.ai-loading-header');
+      if (header) header.remove();
+      panel._fullResult = result.innerHTML;
+    }
+
+    // ═══ AI Card Renderers ═══
+
+    function renderSignalCard(s) {
+      const suggestions = s.suggestions ? s.suggestions.map((x, i) =>
+        `<div class="ai-signal-tip">${escapeHtml(x)}</div>`).join('') : '';
+      const shouldReply = s.should_reply !== undefined
+        ? `<div class="ai-signal-reply ${s.should_reply ? 'yes' : 'no'}">${s.should_reply ? '✅ 建议回复' : '⏸️ 暂不建议回复'}${s.reply_tone ? ' · ' + s.reply_tone : ''}</div>`
+        : '';
+      return `
+        <div class="ai-signal-grid">
+          <div class="ai-signal-item">
+            <div class="ai-signal-label">😶 情绪状态</div>
+            <div class="ai-signal-value">${escapeHtml(s.emotion || '—')}</div>
+          </div>
+          <div class="ai-signal-item">
+            <div class="ai-signal-label">🎯 潜在需求</div>
+            <div class="ai-signal-value">${escapeHtml(s.needs || '—')}</div>
+          </div>
+          <div class="ai-signal-item ${s.risk && s.risk !== '无明显风险' ? 'warn' : ''}">
+            <div class="ai-signal-label">⚠️ 风险信号</div>
+            <div class="ai-signal-value">${escapeHtml(s.risk || '无明显风险')}</div>
+          </div>
+          <div class="ai-signal-item">
+            <div class="ai-signal-label">💡 回复建议</div>
+            <div class="ai-signal-value">${suggestions || '—'}</div>
+          </div>
+        </div>${shouldReply}`;
+    }
+
+    function renderReplyCard(rep) {
+      let h = rep.context_note ? `<div class="ai-reply-context">📌 ${escapeHtml(rep.context_note)}</div>` : '';
+      if (rep.replies) {
+        const icons = ['①', '②', '③'];
+        h += rep.replies.map((r, i) => `
+          <div class="ai-reply-item">
+            <div class="ai-reply-num">${icons[i] || (i+1)}</div>
+            <div class="ai-reply-content">
+              <span class="ai-reply-tag">${escapeHtml(r.style || '回复')}</span>
+              <span class="ai-reply-text">${escapeHtml(r.text || '')}</span>
+              ${r.reason ? `<div class="ai-reply-reason">${escapeHtml(r.reason)}</div>` : ''}
+            </div>
+          </div>`).join('');
+      }
+      return h || '<div class="ai-empty">暂无回复建议</div>';
+    }
+
+    function renderInsightCard(d) {
+      const text = (d.insight || d.raw || '').trim();
+      if (!text) return '<div class="ai-empty">暂无洞察</div>';
+      return `<div class="ai-insight">${escapeHtml(text).replace(/\n/g, '<br>')}</div>`;
+    }
+
+    function renderTopicsCard(d) {
+      const text = (d.topics_insight || d[Object.keys(d)[0]] || '').trim();
+      if (!text) return '<div class="ai-empty">暂无话题数据</div>';
+      // Split on • bullets and render as tag-like items
+      const lines = text.split('\n').filter(l => l.trim());
+      return lines.map(l => {
+        const clean = l.replace(/^[•・·\-]\s*/, '').trim();
+        if (!clean) return '';
+        return `<div class="ai-topic-line">${escapeHtml(clean)}</div>`;
+      }).filter(Boolean).join('') || `<div class="ai-insight">${escapeHtml(text)}</div>`;
+    }
+
+    function renderTodosCard(d) {
+      const todos = d.todos || [];
+      if (!todos.length) return '<div class="ai-empty">📋 没有待办事项</div>';
+      const priColors = { '高': 'var(--red)', '中': 'var(--orange)', '低': 'var(--muted)' };
+      return todos.map(t => `
+        <div class="ai-todo-item">
+          <span class="ai-todo-pri" style="background:${priColors[t.priority] || 'var(--muted)'}">${t.priority || '?'}</span>
+          <span class="ai-todo-who">${escapeHtml(t.who || '')}</span>
+          <span class="ai-todo-item-text">${escapeHtml(t.item || '')}</span>
+          ${t.context ? `<div class="ai-todo-ctx">${escapeHtml(t.context)}</div>` : ''}
+        </div>`).join('');
+    }
+
+    function renderEmotionCard(d) {
+      const text = (d.emotion_insight || d[Object.keys(d)[0]] || '').trim();
+      if (!text) return '<div class="ai-empty">暂无情绪数据</div>';
+      return `<div class="ai-insight">${escapeHtml(text).replace(/\n/g, '<br>')}</div>`;
+    }
+
+    // Auto-load config on page load
+    loadConfig();
+    preloadContacts();
+
+  </script>
+
+  <!-- WebGL Fluid Background -->
+  <script>
+  (function(){
+    var VS='attribute vec2 position;void main(){gl_Position=vec4(position,0.0,1.0);}';
+    var FS='precision highp float;\n'+
+      'uniform vec2 u_resolution;uniform float u_time;uniform vec2 u_mouse;\n'+
+      'vec3 palette(float t,vec3 a,vec3 b,vec3 c,vec3 d){return a+b*cos(6.28318*(c*t+d));}\n'+
+      'void main(){\n'+
+      '  vec2 uv=gl_FragCoord.xy/u_resolution.xy;\n'+
+      '  vec2 p=uv*2.0-1.0;p.x*=u_resolution.x/u_resolution.y;\n'+
+      '  vec2 m=u_mouse*2.0-1.0;m.x*=u_resolution.x/u_resolution.y;\n'+
+      '  float md=length(p-m);\n'+
+      '  float ripple=sin(md*12.0-u_time*3.5)*exp(-md*3.5)*0.06;\n'+
+      '  p+=ripple;\n'+
+      '  vec2 p0=p;\n'+
+      '  for(float i=1.0;i<4.0;i++){\n'+
+      '    p.x+=0.08/i*sin(i*2.8*p.y+u_time*0.35)+0.04;\n'+
+      '    p.y+=0.08/i*cos(i*2.2*p.x+u_time*0.28)-0.04;\n'+
+      '  }\n'+
+      '  float r=length(p);float ang=atan(p.y,p.x);\n'+
+      '  vec3 a=vec3(0.04,0.05,0.08);\n'+
+      '  vec3 b=vec3(0.02,0.03,0.04);\n'+
+      '  vec3 c=vec3(1.0,1.0,1.0);\n'+
+      '  vec3 d=vec3(0.1,0.2,0.5);\n'+
+      '  vec3 col=palette(r*1.4+p0.x*0.4+u_time*0.08,a,b,c,d);\n'+
+      '  float disp=sin(r*22.0-u_time*1.3+ang*1.8)*0.5+0.5;\n'+
+      '  col+=vec3(disp*0.012,disp*0.008,disp*0.015);\n'+
+      '  float hi=pow(sin(p.x*3.5+p.y*2.8+u_time)*0.5+0.5,7.0);\n'+
+      '  col+=hi*0.06;\n'+
+      '  vec3 base=vec3(0.035,0.035,0.04);\n'+
+      '  col=mix(base,col,0.82);\n'+
+      '  gl_FragColor=vec4(col,1.0);\n'+
+      '}';
+
+    var mouse={x:0.5,y:0.5};
+    window.addEventListener('mousemove',function(e){mouse.x=e.clientX/innerWidth;mouse.y=e.clientY/innerHeight});
+
+    var canvas=document.getElementById('bg-fluid');
+    var gl=canvas.getContext('webgl',{alpha:false,antialias:true});
+    if(!gl){canvas.style.display='none';return;}
+
+    function mkShader(type,src){var s=gl.createShader(type);gl.shaderSource(s,src);gl.compileShader(s);return s;}
+    var prog=gl.createProgram();
+    gl.attachShader(prog,mkShader(gl.VERTEX_SHADER,VS));
+    gl.attachShader(prog,mkShader(gl.FRAGMENT_SHADER,FS));
+    gl.linkProgram(prog);gl.useProgram(prog);
+    var buf=gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER,buf);
+    gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,-1,1,1,-1,1,1]),gl.STATIC_DRAW);
+    var pos=gl.getAttribLocation(prog,'position');
+    gl.enableVertexAttribArray(pos);gl.vertexAttribPointer(pos,2,gl.FLOAT,false,0,0);
+    var lRes=gl.getUniformLocation(prog,'u_resolution');
+    var lT=gl.getUniformLocation(prog,'u_time');
+    var lM=gl.getUniformLocation(prog,'u_mouse');
+
+    function resize(){
+      var d=Math.min(window.devicePixelRatio||1,2);
+      canvas.width=innerWidth*d;canvas.height=innerHeight*d;
+      gl.viewport(0,0,canvas.width,canvas.height);
+    }
+    window.addEventListener('resize',resize);resize();
+
+    var t0=Date.now();
+    (function loop(){
+      var t=(Date.now()-t0)/1000;
+      gl.uniform2f(lRes,canvas.width,canvas.height);
+      gl.uniform1f(lT,t);
+      gl.uniform2f(lM,mouse.x,1-mouse.y);
+      gl.drawArrays(gl.TRIANGLES,0,6);
+      requestAnimationFrame(loop);
+    })();
+  })();
+  </script>
+</body>
+</html>

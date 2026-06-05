@@ -1,0 +1,18 @@
+{
+  "decrypted_dir": "decrypted",
+  "lan_enabled": false,
+  "keys_file": "all_keys.json",
+  "db_dir": "",
+  "password": "",
+  "user_nickname": "",
+  "llm": {
+    "api_key": "",
+    "base_url": "",
+    "enabled": false,
+    "max_tokens": 1024,
+    "model": "",
+    "provider": "",
+    "temperature": 0.7
+  },
+  "password_enabled": false
+}

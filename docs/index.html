@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>wechat-analyzer · 微信聊天分析器</title>
+<meta name="description" content="基于 wx-cli 的本地微信聊天分析工具。所有数据在本地计算，无需上传。">
+<style>
+  :root {
+    --bg: #090b10;
+    --bg2: rgba(255,255,255,0.03);
+    --card: rgba(255,255,255,0.04);
+    --card-hover: rgba(255,255,255,0.07);
+    --border: rgba(255,255,255,0.06);
+    --border-hover: rgba(126,184,255,0.25);
+    --text: #e8eaed;
+    --text2: #8b929a;
+    --muted: #4e535a;
+    --accent: #7eb8ff;
+    --accent-dim: rgba(126,184,255,0.12);
+    --accent-border: rgba(126,184,255,0.25);
+    --glass: rgba(255,255,255,0.05);
+    --radius: 14px;
+    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+    --font-mono: "SF Mono", "SFMono-Regular", "Cascadia Code", "JetBrains Mono", "Consolas", monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { font-size: 16px; scroll-behavior: smooth; }
+  body {
+    font-family: var(--font-sans);
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* WebGL background */
+  #bg-fluid {
+    position: fixed; inset: 0; z-index: 0;
+    pointer-events: none; opacity: 0.55;
+  }
+
+  .app { position: relative; z-index: 1; }
+
+  .container {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 60px 24px 80px;
+  }
+
+  /* Header */
+  header {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    margin-bottom: 40px;
+  }
+  .logo-svg {
+    width: 48px; height: 48px;
+    flex-shrink: 0;
+    margin-top: 4px;
+  }
+  .header-text h1 {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--text);
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+    margin-bottom: 8px;
+  }
+  .header-text h1 .dot { color: var(--accent); }
+  .header-text .subtitle {
+    font-size: 1rem;
+    color: var(--text2);
+    line-height: 1.5;
+  }
+
+  /* Divider */
+  .divider {
+    height: 1px;
+    background: linear-gradient(90deg, transparent 0%, var(--accent) 50%, transparent 100%);
+    opacity: 0.15;
+    margin-bottom: 40px;
+  }
+
+  /* Metrics row */
+  .metrics {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1px;
+    margin-bottom: 48px;
+    background: var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  .metric-card {
+    background: var(--card);
+    padding: 24px 16px;
+    text-align: center;
+  }
+  .metric-value {
+    font-family: var(--font-mono);
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: var(--accent);
+    line-height: 1.1;
+    margin-bottom: 6px;
+    letter-spacing: -0.01em;
+  }
+  .metric-label {
+    font-size: 0.78rem;
+    color: var(--text2);
+    line-height: 1.4;
+  }
+
+  /* Section headers */
+  section { margin-bottom: 40px; }
+  h2 {
+    font-size: 1.15rem;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 16px;
+    letter-spacing: -0.01em;
+  }
+  h2 .counter {
+    display: inline-block;
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    font-weight: 500;
+    color: var(--accent);
+    background: var(--accent-dim);
+    border: 1px solid var(--accent-border);
+    border-radius: 4px;
+    padding: 1px 7px;
+    margin-right: 8px;
+    vertical-align: middle;
+  }
+
+  /* Feature grid */
+  .feature-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1px;
+    background: var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  .feature-card {
+    background: var(--card);
+    padding: 20px;
+    transition: background 0.2s;
+  }
+  .feature-card:hover { background: var(--card-hover); }
+  .feature-card .icon {
+    font-size: 1.3rem;
+    margin-bottom: 8px;
+  }
+  .feature-card h3 {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 6px;
+  }
+  .feature-card p {
+    font-size: 0.82rem;
+    color: var(--text2);
+    line-height: 1.55;
+  }
+
+  /* Tables */
+  .table-wrap {
+    border-radius: var(--radius);
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.82rem;
+  }
+  thead { display: none; }
+  tbody tr {
+    display: grid;
+    grid-template-columns: 100px 1fr 1fr;
+    gap: 0;
+    border-bottom: 1px solid var(--border);
+    background: var(--card);
+  }
+  tbody tr:last-child { border-bottom: none; }
+  td {
+    padding: 12px 14px;
+    color: var(--text2);
+    vertical-align: top;
+    line-height: 1.5;
+  }
+  td:first-child {
+    font-weight: 600;
+    color: var(--text);
+    white-space: nowrap;
+  }
+
+  /* Tag */
+  .tag {
+    display: inline-block;
+    background: var(--accent-dim);
+    color: var(--accent);
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-weight: 500;
+  }
+
+  /* Code blocks */
+  pre {
+    background: #0d1117;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    overflow-x: auto;
+    line-height: 1.6;
+    color: #c9d1d9;
+    margin-bottom: 0;
+  }
+  code {
+    font-family: var(--font-mono);
+    font-size: 0.82em;
+    background: var(--accent-dim);
+    padding: 2px 6px;
+    border-radius: 4px;
+    color: var(--accent);
+  }
+  pre code {
+    background: none;
+    padding: 0;
+    color: inherit;
+  }
+
+  /* Callout */
+  .callout {
+    background: var(--card);
+    border-left: 3px solid var(--accent);
+    border-radius: var(--radius);
+    padding: 16px 20px;
+    font-size: 0.88rem;
+    color: var(--text2);
+    line-height: 1.6;
+    margin-bottom: 40px;
+  }
+  .callout strong { color: var(--text); }
+
+  /* Footer */
+  footer {
+    border-top: 1px solid var(--border);
+    padding-top: 24px;
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.8rem;
+    color: var(--muted);
+  }
+  footer a {
+    color: var(--accent);
+    text-decoration: none;
+    opacity: 0.8;
+    transition: opacity 0.2s;
+  }
+  footer a:hover { opacity: 1; }
+
+  /* Responsive */
+  @media (max-width: 640px) {
+    .container { padding: 32px 16px 60px; }
+    header { flex-direction: column; align-items: flex-start; }
+    .header-text h1 { font-size: 1.5rem; }
+    .metrics { grid-template-columns: repeat(2, 1fr); }
+    .feature-grid { grid-template-columns: 1fr; }
+    tbody tr { grid-template-columns: 1fr !important; }
+    td:first-child { padding-bottom: 4px; }
+  }
+</style>
+</head>
+<body>
+
+<canvas id="bg-fluid"></canvas>
+<div class="app">
+  <div class="container">
+
+    <!-- Header -->
+    <header>
+      <svg class="logo-svg" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="1" y="4" width="28" height="22" rx="5" fill="#7eb8ff" opacity="0.9"/>
+        <path d="M5 26 L8 22 L10 22 L8 26 Z" fill="#7eb8ff" opacity="0.9"/>
+        <rect x="7" y="11" width="4" height="9" rx="1" fill="#090b10"/>
+        <rect x="13" y="8" width="4" height="12" rx="1" fill="#090b10"/>
+        <rect x="19" y="14" width="4" height="6" rx="1" fill="#090b10"/>
+      </svg>
+      <div class="header-text">
+        <h1>wechat-analyzer <span class="dot">·</span> 微信聊天分析器</h1>
+        <div class="subtitle">基于 wx-cli 的本地私密聊天分析工具 · 所有计算在本地完成，数据不出设备</div>
+      </div>
+    </header>
+
+    <div class="divider"></div>
+
+    <!-- Metrics -->
+    <div class="metrics">
+      <div class="metric-card">
+        <div class="metric-value">100%</div>
+        <div class="metric-label">本地计算 · 数据不出设备</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-value">6</div>
+        <div class="metric-label">身份识别维度</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-value">12</div>
+        <div class="metric-label">AI 分析维度</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-value">~650</div>
+        <div class="metric-label">支持联系人</div>
+      </div>
+    </div>
+
+    <!-- Features -->
+    <section>
+      <h2><span class="counter">01</span>核心能力</h2>
+      <div class="feature-grid">
+        <div class="feature-card">
+          <div class="icon">💬</div>
+          <h3>私聊分析</h3>
+          <p>信号解读、回复建议、关系洞察、话题挖掘、待办提取、情绪追踪，6 维 AI 深度分析，一键还原对话全貌。</p>
+        </div>
+        <div class="feature-card">
+          <div class="icon">👥</div>
+          <h3>群聊透视</h3>
+          <p>话题排行榜、成员画像、氛围评估、信号雷达、个人足迹、角色地图，6 维结构化信息可视化。</p>
+        </div>
+        <div class="feature-card">
+          <div class="icon">🎭</div>
+          <h3>身份识别</h3>
+          <p>自动识别恋人、朋友、同事、家人、商务、服务 6 种关系身份，每种身份切换专属分析维度和指标体系。</p>
+        </div>
+        <div class="feature-card">
+          <div class="icon">🤖</div>
+          <h3>AI 洞察</h3>
+          <p>AI-generated 优先 + 规则兜底的双引擎架构，支持 DeepSeek / OpenAI 兼容接口，用量透明可追踪。</p>
+        </div>
+        <div class="feature-card">
+          <div class="icon">🔍</div>
+          <h3>智能搜索</h3>
+          <p>汉字、全拼、首字母模糊搜索，IME 输入法完美兼容，~650 个联系人秒级定位。</p>
+        </div>
+        <div class="feature-card">
+          <div class="icon">🔒</div>
+          <h3>本地隐私</h3>
+          <p>所有数据在本地计算，不经过任何第三方服务器。关闭即销毁，不留痕迹。</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Identity System -->
+    <section>
+      <h2><span class="counter">02</span>身份识别体系</h2>
+      <div class="table-wrap">
+        <table>
+          <tbody>
+            <tr><td>💕 恋人</td><td>亲昵词密度 &gt;5%、深夜 &gt;25%、日均 &gt;20</td><td>情感深度 · 权力动态 · 未来信号</td></tr>
+            <tr><td>👨‍👩‍👧 家人</td><td>家庭词 &gt;10、关怀 &gt;亲昵 ×2、通话 &gt;5%</td><td>责任分担 · 代际动态 · 生活参与</td></tr>
+            <tr><td>🏢 同事</td><td>工作词 &gt;5、工作日 &gt;70%、办公时段 &gt;50%</td><td>信息同步 · 边界感 · 依赖模式</td></tr>
+            <tr><td>💼 商务</td><td>商业词 &gt;5、链接 &gt;20%、正式语气</td><td>利益对齐 · 专业匹配 · 风险评估</td></tr>
+            <tr><td>📞 服务</td><td>服务词 &gt;3、对方发起 &gt;60%</td><td>问题解决 · 主动服务 · 客户粘性</td></tr>
+            <tr><td>🤝 朋友</td><td>兜底识别，轻松短句</td><td>兴趣共鸣 · 互惠平衡 · 圈子融合</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Tech Stack -->
+    <section>
+      <h2><span class="counter">03</span>技术栈</h2>
+      <div class="table-wrap">
+        <table>
+          <tbody>
+            <tr><td><span class="tag">Rust</span></td><td>wx-cli</td><td>本地微信数据库读取，daemon 持久缓存，毫秒级响应</td></tr>
+            <tr><td><span class="tag">Python</span></td><td>Flask</td><td>统一 API 路由，LLM 集成，6 身份识别算法引擎</td></tr>
+            <tr><td><span class="tag">AI</span></td><td>DeepSeek / OpenAI</td><td>兼容接口，12+ 分析维度，用量统计与成本追踪</td></tr>
+            <tr><td><span class="tag">前端</span></td><td>HTML + CSS + JS</td><td>暗色主题，WebGL 流体背景，玻璃拟态搜索面板</td></tr>
+            <tr><td><span class="tag">搜索</span></td><td>pinyin-pro</td><td>汉字 / 全拼 / 首字母模糊搜索，IME 兼容</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Quick Install -->
+    <section>
+      <h2><span class="counter">04</span>快速开始</h2>
+      <pre><code># 安装 wx-cli
+npm install -g @jackwener/wx-cli
+
+# 签名微信（macOS，仅首次）
+codesign --force --deep --sign - /Applications/WeChat.app
+killall WeChat && open /Applications/WeChat.app
+sudo wx init
+
+# 启动分析器
+cd wechat-analyzer
+pip install flask requests
+python3 server.py
+# → http://localhost:8899</code></pre>
+    </section>
+
+    <!-- Callout -->
+    <div class="callout">
+      <strong>隐私优先</strong> — 所有计算在本地完成，数据不出设备。API Key、昵称等配置保存在项目 <code>config.json</code> 中，与 Skill Hub 发布的技能包完全分离，用户隐私不受影响。
+    </div>
+
+    <!-- Footer -->
+    <footer>
+      <span>MIT License</span>
+      <span>
+        <a href="https://github.com/jackwener/wx-cli">wx-cli</a>
+        ·
+        <a href="https://github.com/klesen/wechat-analyzer">wechat-analyzer</a>
+      </span>
+    </footer>
+
+  </div>
+</div>
+
+<!-- WebGL fluid background (wechat-analyzer native shader) -->
+<script>
+(function(){
+  var VS='attribute vec2 position;void main(){gl_Position=vec4(position,0.0,1.0);}';
+  var FS='precision highp float;\n'+
+    'uniform vec2 u_resolution;uniform float u_time;uniform vec2 u_mouse;\n'+
+    'vec3 palette(float t,vec3 a,vec3 b,vec3 c,vec3 d){return a+b*cos(6.28318*(c*t+d));}\n'+
+    'void main(){\n'+
+    '  vec2 uv=gl_FragCoord.xy/u_resolution.xy;\n'+
+    '  vec2 p=uv*2.0-1.0;p.x*=u_resolution.x/u_resolution.y;\n'+
+    '  vec2 m=u_mouse*2.0-1.0;m.x*=u_resolution.x/u_resolution.y;\n'+
+    '  float md=length(p-m);\n'+
+    '  float ripple=sin(md*12.0-u_time*3.5)*exp(-md*3.5)*0.06;\n'+
+    '  p+=ripple;\n'+
+    '  vec2 p0=p;\n'+
+    '  for(float i=1.0;i<4.0;i++){\n'+
+    '    p.x+=0.08/i*sin(i*2.8*p.y+u_time*0.35)+0.04;\n'+
+    '    p.y+=0.08/i*cos(i*2.2*p.x+u_time*0.28)-0.04;\n'+
+    '  }\n'+
+    '  float r=length(p);float ang=atan(p.y,p.x);\n'+
+    '  vec3 a=vec3(0.04,0.05,0.08);\n'+
+    '  vec3 b=vec3(0.02,0.03,0.04);\n'+
+    '  vec3 c=vec3(1.0,1.0,1.0);\n'+
+    '  vec3 d=vec3(0.1,0.2,0.5);\n'+
+    '  vec3 col=palette(r*1.4+p0.x*0.4+u_time*0.08,a,b,c,d);\n'+
+    '  float disp=sin(r*22.0-u_time*1.3+ang*1.8)*0.5+0.5;\n'+
+    '  col+=vec3(disp*0.012,disp*0.008,disp*0.015);\n'+
+    '  float hi=pow(sin(p.x*3.5+p.y*2.8+u_time)*0.5+0.5,7.0);\n'+
+    '  col+=hi*0.06;\n'+
+    '  vec3 base=vec3(0.035,0.035,0.04);\n'+
+    '  col=mix(base,col,0.82);\n'+
+    '  gl_FragColor=vec4(col,1.0);\n'+
+    '}';
+
+  var mouse={x:0.5,y:0.5};
+  window.addEventListener('mousemove',function(e){mouse.x=e.clientX/innerWidth;mouse.y=e.clientY/innerHeight});
+
+  var canvas=document.getElementById('bg-fluid');
+  var gl=canvas.getContext('webgl',{alpha:false,antialias:true});
+  if(!gl){canvas.style.display='none';return;}
+
+  function mkShader(type,src){var s=gl.createShader(type);gl.shaderSource(s,src);gl.compileShader(s);return s;}
+  var prog=gl.createProgram();
+  gl.attachShader(prog,mkShader(gl.VERTEX_SHADER,VS));
+  gl.attachShader(prog,mkShader(gl.FRAGMENT_SHADER,FS));
+  gl.linkProgram(prog);gl.useProgram(prog);
+  var buf=gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER,buf);
+  gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,-1,1,1,-1,1,1]),gl.STATIC_DRAW);
+  var pos=gl.getAttribLocation(prog,'position');
+  gl.enableVertexAttribArray(pos);gl.vertexAttribPointer(pos,2,gl.FLOAT,false,0,0);
+  var lRes=gl.getUniformLocation(prog,'u_resolution');
+  var lT=gl.getUniformLocation(prog,'u_time');
+  var lM=gl.getUniformLocation(prog,'u_mouse');
+
+  function resize(){
+    var d=Math.min(window.devicePixelRatio||1,2);
+    canvas.width=innerWidth*d;canvas.height=innerHeight*d;
+    gl.viewport(0,0,canvas.width,canvas.height);
+  }
+  window.addEventListener('resize',resize);resize();
+
+  var t0=Date.now();
+  (function loop(){
+    var t=(Date.now()-t0)/1000;
+    gl.uniform2f(lRes,canvas.width,canvas.height);
+    gl.uniform1f(lT,t);
+    gl.uniform2f(lM,mouse.x,1-mouse.y);
+    gl.drawArrays(gl.TRIANGLES,0,6);
+    requestAnimationFrame(loop);
+  })();
+})();
+</script>
+
+</body>
+</html>
