@@ -130,4 +130,4 @@ python3 server.py
 
 ## 许可证
 
-MIT
+MIT License
