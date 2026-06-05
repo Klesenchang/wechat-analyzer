@@ -4,8 +4,11 @@
 [![Platform](https://img.shields.io/badge/platform-macOS-lightgrey.svg)](#前置条件)
 [![Python](https://img.shields.io/badge/python-3.8%2B-blue)](https://www.python.org)
 [![Flask](https://img.shields.io/badge/Flask-3.x-black)](https://flask.palletsprojects.com)
+[![GitHub Pages](https://img.shields.io/badge/GitHub%20Pages-%E9%A1%B9%E7%9B%AE%E4%BB%8B%E7%BB%8D-blue?logo=github)](https://klesenchang.github.io/wechat-analyzer/)
 
 > 基于 wx-cli 的本地微信聊天分析工具。所有数据在本地计算，**无需上传**。
+
+[查看项目介绍页 →](https://klesenchang.github.io/wechat-analyzer/) — 暗色主题，WebGL 背景，与 app 风格一致。
 
 ---
 
