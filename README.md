@@ -1,4 +1,4 @@
-# wechat-analyzer · 微信聊天分析器 [查看项目介绍页 →](https://klesenchang.github.io/wechat-analyzer/) 
+# wechat-analyzer · [微信聊天分析器 →](https://klesenchang.github.io/wechat-analyzer/) 
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-macOS-lightgrey.svg)](#前置条件)
